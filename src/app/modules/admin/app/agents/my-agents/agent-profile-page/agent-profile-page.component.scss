@@ -1,0 +1,30 @@
+/* Styles for Agent Profile Page */
+
+.mat-card-header .mat-card-title {
+    font-size: 1.75rem; /* Equivalent to text-2xl */
+}
+
+.mat-card-subtitle {
+    color: rgba(0, 0, 0, 0.54); /* Default Material subtitle color */
+}
+
+.dark .mat-card-subtitle {
+    color: rgba(255, 255, 255, 0.7); /* Lighter subtitle for dark mode */
+}
+
+.whitespace-pre-wrap {
+    white-space: pre-wrap;
+}
+
+.icon-size-10 {
+    font-size: 2.5rem; /* Corresponds to h-10 w-10 if 1rem = 16px, so 40px */
+    height: 2.5rem;
+    width: 2.5rem;
+}
+
+/* Ensure consistent spacing and typography with the rest of the application */
+dl dd {
+    word-break: break-word; /* Prevent long strings from breaking layout */
+}
+
+/* Add any additional page-specific styles here */

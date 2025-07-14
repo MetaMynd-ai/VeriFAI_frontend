@@ -1,0 +1,105 @@
+<div class="flex flex-col  flex-auto overflow-y-auto">
+    <!-- FILTERS -->
+    <div class="flex w-full mx-auto max-w-xs flex-col items-center justify-center sm:max-w-none sm:flex-row mb-4"> <!-- Added mx-auto -->
+        <mat-form-field class="w-full sm:w-auto min-w-fit bg-card" [subscriptSizing]="'dynamic'" appearance="outline" floatLabel="never" style="min-width: 0;"> <!-- Added bg-white -->
+            <mat-select [value]="'all'" (selectionChange)="filterByCategory($event)" panelClass="category-select-panel">
+                <mat-option [value]="'all'">All</mat-option>
+                <mat-option *ngFor="let category of categories; trackBy: trackByFnCategories" [value]="category.slug">{{ category.title }}</mat-option>
+            </mat-select>
+        </mat-form-field>
+        <mat-form-field class="mt-4 w-full sm:ml-4 sm:mt-0 sm:w-72 bg-card" [subscriptSizing]="'dynamic'">
+            <mat-icon matPrefix class="icon-size-5" [svgIcon]="'heroicons_solid:magnifying-glass'"></mat-icon>
+            <input (input)="filterByQuery($any($event.target).value)" placeholder="Search by name or purpose" matInput #query />
+        </mat-form-field>
+        <mat-slide-toggle class="mt-8 sm:ml-auto sm:mt-0" [color]="'primary'" (change)="toggleHideOffline()">
+            <span class="ml-2">Hide Offline Agents</span>
+        </mat-slide-toggle>
+    </div>
+
+    <!-- AGENTS LIST -->
+    <div *ngIf="agents$ | async as agents; else loadingOrError">
+        <div *ngIf="filteredAgents(agents).length > 0; else noAgents">
+            <div class="mt-8 grid grid-cols-1 gap-8 sm:mt-10 sm:grid-cols-2 lg:grid-cols-3">
+                <ng-container *ngFor="let agent of filteredAgents(agents); trackBy: trackByFn">
+                    <div class="bg-card flex flex-col overflow-hidden rounded-2xl shadow h-auto min-h-[350px]">
+                        <div class="flex flex-col p-6">
+                            <div class="flex items-center justify-between">
+                                <!-- Category badge -->
+                                <div *ngIf="categories" class="rounded-full px-3 py-0.5 text-sm font-semibold bg-blue-100 text-blue-800 dark:bg-blue-500 dark:text-blue-50">
+                                   Category
+                                </div>
+                                <!-- Status badge -->
+                                <div *ngIf="agent.agentName === 'no profile found'; else onlineStatus"
+                                     class="rounded-full px-3 py-0.5 text-xs font-semibold bg-red-100 text-red-800 dark:bg-red-500 dark:text-red-50 flex items-center">
+                                    <mat-icon class="text-red-500 icon-size-5 mr-1" [svgIcon]="'heroicons_solid:x-circle'" aria-label="Offline Status"></mat-icon>
+                                    Offline
+                                </div>
+                                <ng-template #onlineStatus>
+                                    <div class="rounded-full px-3 py-0.5 text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-500 dark:text-green-50 flex items-center">
+                                        <mat-icon class="text-green-500 icon-size-5 mr-1" [svgIcon]="'heroicons_solid:check-circle'" aria-label="Online Status"></mat-icon>
+                                        Online
+                                    </div>
+                                </ng-template>
+                            </div>
+                            <div class="mt-4 text-lg font-medium"
+                                 [class.text-red-500]="agent.agentName === 'no profile found'"
+                                 [class.text-green-700]="agent.agentName !== 'no profile found'">
+                                {{ agent.agentName ? agent.agentName : 'N/A' }}
+                            </div>
+                            <div class="text-secondary mt-0.5 line-clamp-2">
+                                {{ agent.purpose ? agent.purpose : 'N/A' }}
+                            </div>
+                            <div class="my-3 h-1 w-50 border-t-2"></div>
+                            <!-- Agent image placeholder -->
+                            <div class="flex justify-center mb-4">
+                                <img src="https://gateway.pinata.cloud/ipfs/QmUHvLzwbABWPK3pbyvtnLyht1FY9qRzSKCM3vNRQpSw5Q" alt="Agent avatar" class="rounded-[5px] border border-gray-200 shadow w-24 h-24 object-cover bg-gray-100" />
+                            </div>
+                            <div class="text-secondary flex items-center text-md leading-5">
+                                <mat-icon class="text-hint icon-size-5" [svgIcon]="'heroicons_outline:identification'" aria-label="Account ID"></mat-icon>
+                                <div class="ml-1.5">
+                                    <span class="font-medium">ID:</span>
+                                    <a href="{{hashScanBaseUrl}}account/{{ agent.account.id }}" target="_blank" class="text-blue-500 hover:underline">{{ agent.account.id }}</a>
+                                </div>
+                            </div>
+                            <div class="text-secondary mt-2 flex items-center text-md leading-5">
+                                <mat-icon class="text-hint icon-size-5" [svgIcon]="'heroicons_outline:currency-dollar'" aria-label="Balance"></mat-icon>
+                                <div class="ml-1.5">
+                                    <span class="font-medium">Balance:</span>
+                                    {{ (agent.account.balance !== null ? agent.account.balance : 0) | number:'1.0-4' }} HBAR (ℏ)
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Footer -->
+                        <div class="mt-auto flex w-full flex-col">
+                            <div class="bg-gray-50 px-6 py-4 text-right dark:bg-transparent">
+                                <button mat-stroked-button color="primary" (click)="navigateToAgentProfilePage(agent.account.id)">
+                                    <span class="inline-flex items-center">
+                                        See details
+                                        <mat-icon class="ml-1.5 icon-size-5" svgIcon="heroicons_solid:arrow-small-right"></mat-icon>
+                                    </span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </ng-container>
+            </div>
+        </div>
+        <ng-template #noAgents>
+            <div class="flex flex-col items-center justify-center h-[60vh]">
+                <mat-icon class="text-8xl text-gray-400" svgIcon="heroicons_outline:document-search"></mat-icon>
+                <div class="mt-6 text-2xl font-semibold text-gray-500 text-center">No agents found.</div>
+                <div class="mt-2 text-gray-400 text-center">You currently do not have any smart agents.</div>
+            </div>
+        </ng-template>
+    </div>
+    <ng-template  #loadingOrError>
+        <div class="flex flex-col items-center justify-center  w-full"> <!-- Added w-full -->
+            <mat-progress-spinner mode="indeterminate"></mat-progress-spinner>
+            <div class="mt-4 text-center">
+                <span class="text-lg font-medium text-gray-700">Loading agents...</span>
+            </div>
+        </div>
+    </ng-template>
+</div> <!-- Close new parent div -->
+
+

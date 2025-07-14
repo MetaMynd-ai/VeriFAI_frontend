@@ -1,0 +1,178 @@
+<div class="flex flex-col flex-auto min-w-0">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row flex-0 sm:items-center sm:justify-between p-6 sm:py-8 sm:px-10 border-b bg-card dark:bg-transparent">
+        <div class="flex-1 min-w-0">
+            <!-- Title -->
+            <div class="mt-2">
+                <h2 class="text-3xl md:text-4xl font-extrabold tracking-tight leading-7 sm:leading-10 truncate">
+                    Agent Profile: {{ profileData?.agentName || 'N/A' }}
+                </h2>
+            </div>
+        </div>
+        <!-- Actions -->
+        <div class="flex shrink-0 items-center mt-6 sm:mt-0 sm:ml-4">
+            <button mat-flat-button
+                    color="primary"
+                    (click)="goBack()">
+                <mat-icon svgIcon="heroicons_outline:arrow-left"></mat-icon>
+                <span class="ml-2">Back to My Agents</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main content -->
+    <div class="flex flex-col sm:flex-row flex-0 sm:items-center sm:justify-between p-6 sm:py-8 sm:px-10 border-b bg-card dark:bg-transparent">
+        <div class="w-full">
+            <div *ngIf="isLoading" class="flex justify-center items-center py-16">
+                <mat-spinner [diameter]="50"></mat-spinner>
+            </div>
+
+            <div *ngIf="!isLoading && errorMessage" class="text-center py-8 px-4 bg-red-50 dark:bg-red-900 text-red-700 dark:text-red-200 rounded-lg">
+                <mat-icon class="icon-size-10">error_outline</mat-icon>
+                <p class="mt-2 text-xl font-semibold">{{ errorMessage }}</p>
+                <p class="mt-1">Please check the agent ID or try again later.</p>
+            </div>
+
+            <div *ngIf="!isLoading && !profileData && !errorMessage" class="text-center py-8 px-4 bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg">
+                <mat-icon class="icon-size-10">info_outline</mat-icon>
+                <p class="mt-2 text-xl font-semibold">No Profile Data</p>
+                <p class="mt-1">Agent profile information could not be loaded.</p>
+            </div>
+
+            <mat-card *ngIf="!isLoading && profileData" class="overflow-hidden">
+                <!-- <mat-card-header class="p-6 sm:py-8 sm:px-10 border-b">
+                    <mat-card-title class="text-2xl">{{ profileData.agentName }}</mat-card-title>
+                    <mat-card-subtitle>{{ profileData.agentAccountId }}</mat-card-subtitle>
+                </mat-card-header> -->
+
+                <mat-card-content class="p-6 space-y-4">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-300">Agent Details</h3>
+                        
+                        <dl class="mt-2 grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+                            <div class="sm:col-span-1">
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Account ID</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100">
+                                    <ng-container *ngIf="profileData.agentAccountId">
+                                        <a [href]="hashScanBaseUrl + 'account/' + profileData.agentAccountId" target="_blank" rel="noopener noreferrer" class="text-primary-600 dark:text-primary-400 hover:underline">{{ profileData.agentAccountId }}</a>
+                                    </ng-container>
+                                    <span *ngIf="!profileData.agentAccountId">N/A</span>
+                                </dd>
+                            </div>
+                            <div class="sm:col-span-1">
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">DID</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100">
+                                    <ng-container *ngIf="profileData.agentDid">
+                                        <a [href]="hashScanBaseUrl + 'topic/' + profileData.agentDid.split('_')[1]" target="_blank" rel="noopener noreferrer" class="text-primary-600 dark:text-primary-400 hover:underline">{{ profileData.agentDid}}</a>
+                                    </ng-container>
+                                    <span *ngIf="!profileData.agentDid">N/A</span>
+                                </dd>
+                            </div>
+                            <div class="sm:col-span-1">
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Owner DID</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100">
+                                    <ng-container *ngIf="profileData.agentOwnerDID">
+                                        <a [href]="hashScanBaseUrl + 'topic/' + profileData.agentOwnerDID.split('_')[1]" target="_blank" rel="noopener noreferrer" class="text-primary-600 dark:text-primary-400 hover:underline">{{ profileData.agentOwnerDID }}</a>
+                                    </ng-container>
+                                    <span *ngIf="!profileData.agentOwnerDID">N/A</span>
+                                </dd>
+                            </div>
+                            <div class="sm:col-span-2">
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Description</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap">{{ profileData.agentDescription || 'N/A' }}</dd>
+                            </div>
+                            <div class="sm:col-span-1">
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Purpose</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100">{{ profileData.purpose || 'N/A' }}</dd>
+                            </div>
+                            <div class="sm:col-span-1">
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">URL</dt>
+                                <dd class="mt-1 text-sm text-primary-600 dark:text-primary-400 hover:underline">
+                                    <a [href]="profileData.url" target="_blank" rel="noopener noreferrer">{{ profileData.url || 'N/A' }}</a>
+                                </dd>
+                            </div>
+                            <div class="sm:col-span-1">
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Status</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100">{{ (profileData.status | toTitleCase) || 'N/A' }}</dd>
+                            </div>
+                            <div class="sm:col-span-1">
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">VC Issue Status</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100">{{ (profileData.vcIssueStatus | toTitleCase) || 'N/A' }}</dd>
+                            </div>
+                            <div class="sm:col-span-1">
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Agent Type</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100">{{ (profileData.agentType | toTitleCase) || 'N/A' }}</dd>
+                            </div>
+                            <div class="sm:col-span-1">
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Agent Category</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100">{{ (profileData.agentCategory | toTitleCase) || 'N/A' }}</dd>
+                            </div>
+                            <div class="sm:col-span-1">
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Registry Topic Sequence</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100">{{ profileData.registryTopicSeq || 'N/A' }}</dd>
+                            </div>
+                            <div class="sm:col-span-1">
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Account Balance</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100">
+                                    <span *ngIf="profileData.account?.balance !== null && profileData.account?.balance !== undefined; else noBalance">
+                                        {{ profileData.account.balance | number:'1.0-8' }} HBAR (ℏ)
+                                    </span>
+                                    <ng-template #noBalance>N/A</ng-template>
+                                </dd>
+                            </div>
+                             <div class="sm:col-span-1">
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Created At</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100">{{ profileData.createdAt | date:'longDate' }} ({{ profileData.createdAt | date:'shortTime' }})</dd>
+                            </div>
+                        </dl>
+                    </div>
+
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-300">Capabilities</h3>
+                        <div *ngIf="profileData.capability?.length > 0; else noCapabilities" class="mt-2">
+                            <ul class="list-disc list-inside pl-1 space-y-1">
+                                <li *ngFor="let cap of profileData.capability" class="text-sm text-gray-900 dark:text-gray-100">{{ cap | toTitleCase }}</li>
+                            </ul>
+                        </div>
+                        <ng-template #noCapabilities>
+                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">No capabilities listed.</p>
+                        </ng-template>
+                    </div>
+
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-300">Communication Topics</h3>
+                         <dl class="mt-2 grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+                            <div class="sm:col-span-1">
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Inbound Topic ID</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100">
+                                    <a *ngIf="profileData.inboundTopicId" [href]="hashScanBaseUrl + 'topic/' + profileData.inboundTopicId" target="_blank" rel="noopener noreferrer" class="text-primary-600 dark:text-primary-400 hover:underline">
+                                        {{ profileData.inboundTopicId }}
+                                    </a>
+                                    <span *ngIf="!profileData.inboundTopicId">N/A</span>
+                                </dd>
+                            </div>
+                            <div class="sm:col-span-1">
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Outbound Topic ID</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100">
+                                    <a *ngIf="profileData.outboundTopicId" [href]="hashScanBaseUrl + 'topic/' + profileData.outboundTopicId" target="_blank" rel="noopener noreferrer" class="text-primary-600 dark:text-primary-400 hover:underline">
+                                        {{ profileData.outboundTopicId }}
+                                    </a>
+                                    <span *ngIf="!profileData.outboundTopicId">N/A</span>
+                                </dd>
+                            </div>
+                            <div class="sm:col-span-2">
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Communication Topic ID</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100">
+                                    <a *ngIf="profileData.communicationTopicId" [href]="hashScanBaseUrl + 'topic/' + profileData.communicationTopicId" target="_blank" rel="noopener noreferrer" class="text-primary-600 dark:text-primary-400 hover:underline">
+                                        {{ profileData.communicationTopicId }}
+                                    </a>
+                                    <span *ngIf="!profileData.communicationTopicId">N/A</span>
+                                </dd>
+                            </div>
+                        </dl>
+                    </div>
+                </mat-card-content>
+            </mat-card>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,39 @@
+<div class="absolute inset-0 flex min-w-0 flex-col overflow-y-auto" cdkScrollable>
+    <!-- Header (Conditionally Rendered) -->
+    <div *ngIf="showPageHeader" class="dark relative flex-0 overflow-hidden bg-gray-800 px-4 py-8 sm:p-16">
+        <!-- Background -->
+        <svg class="absolute inset-0 pointer-events-none"
+             viewBox="0 0 960 540" width="100%" height="100%" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">
+            <g class="text-gray-700 opacity-25" fill="none" stroke="currentColor" stroke-width="100">
+                <circle r="234" cx="196" cy="23"></circle>
+                <circle r="234" cx="790" cy="491"></circle>
+            </g>
+        </svg>
+        <div class="relative z-10 flex flex-col items-center">
+            <div class="mt-1 text-center text-4xl font-extrabold leading-tight tracking-tight sm:text-7xl">
+                Manage your agents
+            </div>
+            <div class="mt-6 text-secondary max-w-2xl text-center tracking-tight sm:text-2xl">
+                Your agents help you interact with the blockchain and decentralized services.
+            </div>
+            <div class="mt-8" *ngIf="showAddAgentButton">
+                <button type="button"
+                        class="inline-flex items-center px-6 py-3 border border-transparent shadow-sm text-base font-medium rounded-md text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                        [routerLink]="['new']">
+                    <mat-icon class="mr-2" svgIcon="heroicons_outline:plus"></mat-icon>
+                    Add Agent
+                </button>
+            </div>
+        </div>
+    </div>
+    <!-- Main content area for child routes -->
+    <div class="flex flex-auto p-6 sm:p-10">
+        <div class="mx-auto flex w-full flex-auto flex-col" [ngClass]="showFilters ? 'w-full' : 'max-w-full'">
+            <!-- Router Outlet for child components -->
+            <div [ngClass]="showFilters ? 'mt-8 sm:mt-10' : ''">
+                 <router-outlet></router-outlet>
+            </div>
+        </div>
+    </div>
+
+</div>

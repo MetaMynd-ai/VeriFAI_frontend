@@ -1,0 +1,170 @@
+<div class="absolute  flex flex-col min-w-0 ">
+  <!-- Header -->
+
+  <div class="flex flex-col sm:flex-row flex-0 sm:items-center sm:justify-between p-6 sm:py-8 sm:px-10 border-b bg-card dark:bg-transparent">
+    <div class="flex-1 min-w-0">
+      <div class="mt-2">
+        <h2 class="text-3xl md:text-4xl font-extrabold tracking-tight leading-7 sm:leading-10 truncate">
+          {{ isEditMode ? 'Edit Agent' : 'Create New Agent Wizard' }}
+        </h2>
+      </div>
+    </div>
+    <div class="flex-shrink-0 mt-4 sm:mt-0 sm:ml-4">
+      <button mat-flat-button color="primary" (click)="onCancel()" *ngIf="!isEditMode && currentStep === 0">
+        <mat-icon class="icon-size-5 mr-2" [svgIcon]="'heroicons_solid:arrow-left'"></mat-icon>
+        Cancel
+      </button>
+      <button mat-flat-button color="warn" (click)="onCancel()" *ngIf="isEditMode || currentStep > 0">
+        <mat-icon class="icon-size-5 mr-2" [svgIcon]="'heroicons_solid:x-mark'"></mat-icon>
+        {{ currentStep > 0 && !isEditMode ? 'Abort Creation' : 'Cancel Edit' }}
+      </button>
+    </div>
+  </div>
+  <!-- Main Content -->
+  <div class="flex-auto p-0 mt-8 sm:p-0 overflow-y-auto" cdkScrollable>
+    <div class="flex flex-col md:flex-row">
+      <!-- Stepper for Agent Creation (Vertical on left for md and up) -->
+       
+      <div class="md:w-1/4 md:pr-8 mb-6 md:mb-0 bg-card md:mr-4 p-6">
+        <h3 class="text-lg font-semibold mb-4 text-left pl-6">Agent Creation Steps</h3>
+       <mat-stepper [linear]="true" #stepper [selectedIndex]="currentStep > 0 ? Math.min(currentStep - 1, 5) : 0"
+                     class="bg-transparent w-full"
+                     [orientation]="stepperOrientation">
+          <mat-step [label]="'Create Wallet'" [completed]="currentStep > 1 || !!walletAccountId">
+            <div class="p-0 text-left ml-0">
+              <div *ngIf="isLoadingWallet"><mat-progress-bar mode="indeterminate"></mat-progress-bar>Creating Wallet...</div>
+              <div *ngIf="walletAccountId && !errorWallet && currentStep >= 2" class="text-green-500"><mat-icon>check_circle</mat-icon> Wallet Created: {{ walletAccountId }}</div>
+              <div *ngIf="errorWallet && currentStep === 1" class="text-red-500"><mat-icon>error</mat-icon> {{ errorWallet }}</div>
+            </div>
+          </mat-step>
+          <mat-step [label]="'Issue DID'" [completed]="currentStep > 2 || !!agentDID">
+            <div class="p-0 text-left ml-0">
+              <div *ngIf="isLoadingDid"><mat-progress-bar mode="indeterminate"></mat-progress-bar>Issuing DID...</div>
+              <div *ngIf="agentDID && !errorDid && currentStep >= 3" class="text-green-500"><mat-icon>check_circle</mat-icon> DID Issued: {{ agentDID }}</div>
+              <div *ngIf="errorDid && currentStep === 2" class="text-red-500"><mat-icon>error</mat-icon> {{ errorDid }}</div>
+            </div>
+          </mat-step>
+          <mat-step [label]="'Create Agent Profile'" [completed]="currentStep > 3 || !!profileResponse">
+            <div class="p-0 text-left ml-0">
+              <div *ngIf="isLoadingProfile"><mat-progress-bar mode="indeterminate"></mat-progress-bar>Creating Profile...</div>
+              <div *ngIf="profileResponse && !errorProfile && currentStep >= 4" class="text-green-500"><mat-icon>check_circle</mat-icon> Profile Created Successfully.</div>
+              <div *ngIf="errorProfile && currentStep === 3" class="text-red-500"><mat-icon>error</mat-icon> {{ errorProfile }}</div>
+            </div>
+          </mat-step>
+          <mat-step [label]="'Issue Verifiable Credential'" [completed]="currentStep > 4 || !!vcCreationResponse">
+            <div class="p-0 text-left ml-0">
+              <div *ngIf="isLoadingVc"><mat-progress-bar mode="indeterminate"></mat-progress-bar>Issuing VC...</div>
+              <div *ngIf="vcCreationResponse && !errorVc && currentStep >= 5" class="text-green-500"><mat-icon>check_circle</mat-icon> Verifiable Credential Issued!</div>
+              <div *ngIf="errorVc && currentStep === 4" class="text-red-500"><mat-icon>error</mat-icon> {{ errorVc }}</div>
+            </div>
+          </mat-step>
+          <mat-step [label]="'Finalize & Register Agent'" [completed]="currentStep > 5">
+            <div class="p-0 text-left ml-0">
+              <div *ngIf="currentStep === 5 && !isLoadingVc && !errorVc"><mat-progress-bar mode="indeterminate"></mat-progress-bar>Finalizing agent registration...</div>
+              <div *ngIf="currentStep >= 6 && !errorVc" class="text-green-500"><mat-icon>check_circle</mat-icon> Agent Finalized & Registered!</div>
+            </div>
+          </mat-step>
+          <mat-step [label]="'Completed'">
+            <div class="p-2 text-center text-green-500">
+              <mat-icon>celebration</mat-icon> Agent Creation Successful! <!-- Redirecting... -->
+            </div>
+          </mat-step>
+        </mat-stepper>
+      </div>
+      <!-- Agent Profile Form (Right side) -->
+      <div class="md:w-3/4">
+        <!-- Agent Profile Form (Visible initially for create, or always for edit) -->
+        <form [formGroup]="agentForm" (ngSubmit)="onSubmit()" class="space-y-6 bg-card p-6  shadow" *ngIf="currentStep === 0 || isEditMode || (!isEditMode && currentStep > 0)">
+          <fieldset [disabled]="!isEditMode && currentStep > 0 && currentStep < 5">
+            <h3 class="text-xl font-semibold mb-4" *ngIf="!isEditMode && currentStep === 0">Step 1: Agent Details</h3>
+            <h3 class="text-xl font-semibold mb-4" *ngIf="isEditMode">Edit Agent Details</h3>
+            <h3 class="text-xl font-semibold mb-4" *ngIf="!isEditMode && currentStep > 0 && currentStep < 5">Agent Details (Locked)</h3>
+            
+            <!-- Agent Name -->
+            <mat-form-field appearance="outline" class="w-full">
+              <mat-label>Agent Name</mat-label>
+              <input matInput formControlName="agentName" required>
+              <mat-error *ngIf="agentForm.get('agentName')?.hasError('required') && agentForm.get('agentName')?.touched">
+                Agent Name is required.
+              </mat-error>
+            </mat-form-field>
+
+            <!-- Agent Description -->
+            <mat-form-field appearance="outline" class="w-full">
+              <mat-label>Agent Description</mat-label>
+              <textarea matInput formControlName="agentDescription" cdkTextareaAutosize cdkAutosizeMinRows="3"></textarea>
+            </mat-form-field>
+
+            <!-- Purpose -->
+            <mat-form-field appearance="outline" class="w-full">
+              <mat-label>Purpose</mat-label>
+              <textarea matInput formControlName="purpose" cdkTextareaAutosize cdkAutosizeMinRows="2"></textarea>
+            </mat-form-field>
+
+            <!-- URL -->
+            <mat-form-field appearance="outline" class="w-full">
+              <mat-label>Agent URL </mat-label>
+              <input matInput type="url" formControlName="agentUrl" placeholder="https://example.com" [defaultValue]="agentUrl">
+              <mat-error *ngIf="agentForm.get('agentUrl')?.hasError('pattern') && agentForm.get('agentUrl')?.touched">
+                Please enter a valid URL (e.g., https://example.com).
+              </mat-error>
+            </mat-form-field>
+
+            <!-- Agent Type -->
+            <mat-form-field appearance="outline" class="w-full">
+              <mat-label>Agent Type</mat-label>
+              <mat-select formControlName="agentType" required>
+                <mat-option *ngFor="let type of agentTypes" [value]="type">{{ type }}</mat-option>
+              </mat-select>
+              <mat-error *ngIf="agentForm.get('agentType')?.hasError('required') && agentForm.get('agentType')?.touched">
+                Agent Type is required.
+              </mat-error>
+            </mat-form-field>
+
+            <!-- Agent Category -->
+            <mat-form-field appearance="outline" class="w-full">
+              <mat-label>Agent Category</mat-label>
+              <mat-select formControlName="agentCategory" required>
+                <mat-option *ngFor="let category of agentCategories" [value]="category">{{ category | titlecase }}</mat-option>
+              </mat-select>
+              <mat-error *ngIf="agentForm.get('agentCategory')?.hasError('required') && agentForm.get('agentCategory')?.touched">
+                Agent Category is required.
+              </mat-error>
+            </mat-form-field>
+
+            <!-- Capabilities -->
+            <mat-form-field appearance="outline" class="w-full">
+              <mat-label>Capabilities</mat-label>
+              <mat-select formControlName="capability" multiple>
+                <mat-option *ngFor="let cap of capabilitiesList" [value]="cap">{{ cap | titlecase }}</mat-option>
+              </mat-select>
+            </mat-form-field>
+
+            <!-- Action Buttons -->
+            <div class="flex justify-end space-x-3 mt-8">
+              <button mat-stroked-button type="button" (click)="onCancel()" *ngIf="!isEditMode && currentStep === 0">
+                Cancel
+              </button>
+              <button mat-flat-button color="primary" type="submit" [disabled]="agentForm.invalid || (isLoadingWallet || isLoadingDid || isLoadingProfile || isLoadingVc) || (!isEditMode && currentStep > 0 && currentStep < 5)">
+                {{ isEditMode ? 'Update Agent Profile' : (currentStep === 0 ? 'Start Agent Creation' : 'Processing...') }}
+              </button>
+            </div>
+          </fieldset>
+        </form>
+        <div *ngIf="!isEditMode && currentStep > 0 && currentStep < 5" class="text-center mt-8 bg-card p-6 shadow">
+          <p class="text-lg"><mat-icon class="animate-spin mr-2">sync</mat-icon> Agent creation in progress. Please wait...</p>
+          <p class="text-sm text-gray-500">You can abort this process, but any completed steps (like wallet creation) might not be automatically rolled back.</p>
+        </div>
+
+        <div *ngIf="!isEditMode && currentStep >= 5" class="text-center mt-8 bg-card p-6 shadow">
+            <div *ngIf="currentStep === 5">
+                <p class="text-lg"><mat-icon class="animate-spin mr-2">sync</mat-icon> Finalizing and Registering Agent...</p>
+            </div>
+            <div *ngIf="currentStep === 6">
+                <p class="text-lg text-green-500"><mat-icon>celebration</mat-icon> Agent Creation Successful! Redirecting...</p>
+            </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

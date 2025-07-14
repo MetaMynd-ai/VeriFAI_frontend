@@ -1,0 +1,37 @@
+
+/* styles.scss or your global stylesheet */
+
+/* Component-specific styles for AgentFormComponent if not using global styles */
+
+/* Reduce spacing for vertical stepper */
+::ng-deep .mat-vertical-stepper-content {
+    padding: 0 24px 12px 24px !important; /* Reduce bottom padding */
+}
+
+::ng-deep .mat-step-header {
+    padding: 12px 24px !important; /* Reduce padding for step headers */
+    height: auto !important; /* Adjust height if necessary */
+}
+
+::ng-deep .mat-vertical-content-container {
+    margin-left: 36px !important; /* Default is 36px, adjust if needed based on icon/number width */
+}
+
+::ng-deep .mat-step-label {
+    font-size: 0.9em; /* Slightly reduce label font size if needed */
+}
+
+/* Further reduce space if a custom class is applied */
+::ng-deep .compact-vertical-stepper .mat-vertical-stepper-content {
+    padding: 0 24px 8px 24px !important; /* Even smaller bottom padding */
+}
+
+::ng-deep .compact-vertical-stepper .mat-step-header {
+    padding: 8px 24px !important; /* Smaller padding for step headers */
+}
+
+/* You might also want to adjust the line that connects the steps if it looks too long */
+::ng-deep .mat-stepper-vertical-line::before {
+    /* Adjust if necessary, though often this is fine */
+}
+
