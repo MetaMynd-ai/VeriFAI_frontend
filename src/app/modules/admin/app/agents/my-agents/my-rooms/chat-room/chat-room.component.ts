@@ -664,7 +664,7 @@ export class ChatRoomComponent implements OnInit, OnDestroy, AfterViewChecked {
      * Get message bubble class
      */
     getMessageBubbleClass(fromAgentId: string): string {
-        const baseClass = 'max-w-xs lg:max-w-md px-4 py-2 rounded-lg';
+        const baseClass = 'w-full max-w-none px-4 py-2 rounded-lg break-words';
         const currentSession = this.getCurrentSession();
         if (!currentSession) return `${baseClass} bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white`;
 

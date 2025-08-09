@@ -18,12 +18,30 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { Subject, Observable, combineLatest } from 'rxjs';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { Subject, Observable, combineLatest, forkJoin } from 'rxjs';
 import { takeUntil, map, finalize, startWith, shareReplay } from 'rxjs/operators';
 import { AgentChatService } from '../../agent-chat.service';
 import { AgentService } from '../../agent.service';
 import { AgentSelectionItem, CreateSessionRequest } from '../../agent-chat.interfaces';
-import { AgentListItem } from '../../agent.interfaces';
+import { AgentProfile } from '../../agent.interfaces';
+
+// Agent verification interfaces
+interface AgentVerificationStatus {
+    agentAccountId: string;
+    agentName: string;
+    isVerifying: boolean;
+    isVerified: boolean;
+    hasAgentDid: boolean;
+    hasAgentOwnerDid: boolean;
+    error: string | null;
+}
+
+interface VerificationStep {
+    message: string;
+    isComplete: boolean;
+    isAnimating: boolean;
+}
 
 @Component({
     selector: 'room-creation',
@@ -41,7 +59,8 @@ import { AgentListItem } from '../../agent.interfaces';
         MatSelectModule,
         MatRadioModule,
         MatProgressSpinnerModule,
-        MatSnackBarModule
+        MatSnackBarModule,
+        MatTooltipModule
     ]
 })
 export class RoomCreationComponent implements OnInit, OnDestroy {
@@ -59,6 +78,14 @@ export class RoomCreationComponent implements OnInit, OnDestroy {
     isLoading = false;
     isCreating = false;
     error: string | null = null;
+
+    // Agent verification state
+    isVerifying = false;
+    verificationComplete = false;
+    verificationSuccessful = false;
+    agentVerificationStatuses: AgentVerificationStatus[] = [];
+    verificationSteps: VerificationStep[] = [];
+    showVerificationModal = false;
 
     // Cache for agent names to avoid repeated lookups
     private agentNamesCache = new Map<string, string>();
@@ -180,7 +207,7 @@ export class RoomCreationComponent implements OnInit, OnDestroy {
     }
 
     /**
-     * Create the chat room
+     * Create the chat room (now with verification step)
      */
     createRoom(): void {
         if (this.roomForm.invalid) {
@@ -188,8 +215,190 @@ export class RoomCreationComponent implements OnInit, OnDestroy {
             return;
         }
 
-        this.isCreating = true;
+        // Start agent verification process
+        this.startAgentVerification();
+    }
+
+    /**
+     * Start the agent verification process
+     */
+    private startAgentVerification(): void {
+        const formValue = this.roomForm.value;
+        const agent1Id = formValue.agent1;
+        const agent2Id = formValue.agent2;
+
+        // Initialize verification state
+        this.isVerifying = true;
+        this.verificationComplete = false;
+        this.verificationSuccessful = false;
+        this.showVerificationModal = true;
         this.error = null;
+
+        // Initialize agent verification statuses
+        this.agentVerificationStatuses = [
+            {
+                agentAccountId: agent1Id,
+                agentName: this.getAgentName(agent1Id),
+                isVerifying: true,
+                isVerified: false,
+                hasAgentDid: false,
+                hasAgentOwnerDid: false,
+                error: null
+            },
+            {
+                agentAccountId: agent2Id,
+                agentName: this.getAgentName(agent2Id),
+                isVerifying: true,
+                isVerified: false,
+                hasAgentDid: false,
+                hasAgentOwnerDid: false,
+                error: null
+            }
+        ];
+
+        // Initialize verification steps
+        this.verificationSteps = [
+            { message: 'Verifying agents...', isComplete: false, isAnimating: true },
+            { message: 'Agent DID verification', isComplete: false, isAnimating: false },
+            { message: 'Agent Owner DID verification', isComplete: false, isAnimating: false },
+            { message: 'Ready to create room', isComplete: false, isAnimating: false }
+        ];
+
+        this._cdr.markForCheck();
+
+        // Start verification for both agents
+        this.verifyAgents([agent1Id, agent2Id]);
+    }
+
+    /**
+     * Verify multiple agents
+     */
+    private verifyAgents(agentIds: string[]): void {
+        const verificationObservables = agentIds.map(agentId =>
+            this._agentService.getAgentProfileById(agentId).pipe(
+                map(profile => ({ agentId, profile }))
+            )
+        );
+
+        forkJoin(verificationObservables).pipe(
+            takeUntil(this._unsubscribeAll)
+        ).subscribe({
+            next: (results) => {
+                this.processVerificationResults(results);
+            },
+            error: (error) => {
+                console.error('[RoomCreationComponent] Error during agent verification:', error);
+                this.handleVerificationError('Failed to verify agents. Please try again.');
+            }
+        });
+    }
+
+    /**
+     * Process verification results
+     */
+    private processVerificationResults(results: { agentId: string; profile: AgentProfile }[]): void {
+        let allAgentsVerified = true;
+
+        // Update verification status for each agent
+        results.forEach(({ agentId, profile }) => {
+            const statusIndex = this.agentVerificationStatuses.findIndex(s => s.agentAccountId === agentId);
+            if (statusIndex !== -1) {
+                const status = this.agentVerificationStatuses[statusIndex];
+
+                // Check if agentDid and agentOwnerDID exist and are not empty
+                status.hasAgentDid = !!(profile.agentDid && profile.agentDid.trim());
+                status.hasAgentOwnerDid = !!(profile.agentOwnerDID && profile.agentOwnerDID.trim());
+                status.isVerified = status.hasAgentDid && status.hasAgentOwnerDid;
+                status.isVerifying = false;
+
+                if (!status.isVerified) {
+                    allAgentsVerified = false;
+                    const missingFields = [];
+                    if (!status.hasAgentDid) missingFields.push('Agent DID');
+                    if (!status.hasAgentOwnerDid) missingFields.push('Agent Owner DID');
+                    status.error = `Missing: ${missingFields.join(', ')}`;
+                }
+            }
+        });
+
+        // Update verification steps with animation
+        this.updateVerificationSteps(allAgentsVerified);
+
+        if (allAgentsVerified) {
+            // All agents verified, show completion and wait for user to proceed
+            this.verificationSuccessful = true;
+            setTimeout(() => {
+                this.isVerifying = false;
+                this.verificationComplete = true;
+                this._cdr.markForCheck();
+            }, 1500); // Delay to show completion animation
+        } else {
+            // Some agents failed verification
+            this.handleVerificationError('Agent verification failed. Please ensure all agents have valid DIDs.');
+        }
+
+        this._cdr.markForCheck();
+    }
+
+    /**
+     * Update verification steps with animations
+     */
+    private updateVerificationSteps(allVerified: boolean): void {
+        // Step 1: Verifying agents (complete)
+        this.verificationSteps[0].isComplete = true;
+        this.verificationSteps[0].isAnimating = false;
+
+        setTimeout(() => {
+            // Step 2: Agent DID verification
+            this.verificationSteps[1].isAnimating = true;
+            this._cdr.markForCheck();
+
+            setTimeout(() => {
+                this.verificationSteps[1].isComplete = allVerified;
+                this.verificationSteps[1].isAnimating = false;
+
+                if (allVerified) {
+                    // Step 3: Agent Owner DID verification
+                    this.verificationSteps[2].isAnimating = true;
+                    this._cdr.markForCheck();
+
+                    setTimeout(() => {
+                        this.verificationSteps[2].isComplete = true;
+                        this.verificationSteps[2].isAnimating = false;
+
+                        // Step 4: Ready to create room
+                        this.verificationSteps[3].isAnimating = true;
+                        this._cdr.markForCheck();
+
+                        setTimeout(() => {
+                            this.verificationSteps[3].isComplete = true;
+                            this.verificationSteps[3].isAnimating = false;
+                            this._cdr.markForCheck();
+                        }, 1000);
+                    }, 1000);
+                }
+                this._cdr.markForCheck();
+            }, 1000);
+        }, 800);
+    }
+
+    /**
+     * Handle verification errors
+     */
+    private handleVerificationError(errorMessage: string): void {
+        this.isVerifying = false;
+        this.error = errorMessage;
+        this._cdr.markForCheck();
+    }
+
+    /**
+     * Proceed to actual room creation after successful verification
+     */
+    proceedToRoomCreation(): void {
+        this.showVerificationModal = false;
+        this.isCreating = true;
+        this.isVerifying = false;
+        this.verificationComplete = true;
 
         const formValue = this.roomForm.value;
         const request: CreateSessionRequest = {
@@ -209,12 +418,12 @@ export class RoomCreationComponent implements OnInit, OnDestroy {
                 if (response.success) {
                     // Clear sessions cache so new room appears in rooms list
                     this._agentChatService.clearSessionsCache();
-                    
+
                     this._snackBar.open('Chat room created successfully!', 'Close', {
                         duration: 3000,
                         panelClass: ['success-snackbar']
                     });
-                    
+
                     // Navigate to the new chat room
                     this._router.navigate(['/my-agents/rooms/chat', response.data.sessionId]);
                 } else {
@@ -230,6 +439,26 @@ export class RoomCreationComponent implements OnInit, OnDestroy {
                 });
             }
         });
+    }
+
+    /**
+     * Close verification modal and reset state
+     */
+    closeVerificationModal(): void {
+        this.showVerificationModal = false;
+        this.isVerifying = false;
+        this.verificationComplete = false;
+        this.verificationSuccessful = false;
+        this.agentVerificationStatuses = [];
+        this.verificationSteps = [];
+        this._cdr.markForCheck();
+    }
+
+    /**
+     * Retry verification process
+     */
+    retryVerification(): void {
+        this.startAgentVerification();
     }
 
     /**
@@ -276,7 +505,7 @@ export class RoomCreationComponent implements OnInit, OnDestroy {
     /**
      * Track by function for ngFor loops
      */
-    trackByAgentId(index: number, agent: AgentSelectionItem): string {
+    trackByAgentId(_: number, agent: AgentSelectionItem): string {
         return agent.accountId;
     }
 }
