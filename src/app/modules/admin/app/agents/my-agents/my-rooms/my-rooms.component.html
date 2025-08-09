@@ -1,0 +1,165 @@
+<div class="flex flex-col flex-auto overflow-y-auto">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h2 class="text-2xl font-bold text-gray-900 dark:text-white">My Rooms</h2>
+            <p class="text-gray-600 dark:text-gray-400 mt-1">Manage agent-to-agent conversations</p>
+        </div>
+        <div class="flex items-center space-x-3">
+            <button 
+                mat-stroked-button 
+                color="primary" 
+                (click)="refreshRooms()"
+                [disabled]="isLoading">
+                <mat-icon class="mr-2" svgIcon="heroicons_outline:arrow-path"></mat-icon>
+                Refresh
+            </button>
+            <button 
+                mat-flat-button 
+                color="primary" 
+                [routerLink]="['create']">
+                <mat-icon class="mr-2" svgIcon="heroicons_outline:plus"></mat-icon>
+                Create Room
+            </button>
+        </div>
+    </div>
+
+    <!-- Loading State -->
+    <div *ngIf="isLoading" class="flex flex-col items-center justify-center py-16">
+        <mat-progress-spinner mode="indeterminate" diameter="48"></mat-progress-spinner>
+        <div class="mt-4 text-center">
+            <span class="text-lg font-medium text-gray-700 dark:text-gray-300">Loading rooms...</span>
+        </div>
+    </div>
+
+    <!-- Error State -->
+    <div *ngIf="error && !isLoading" class="flex flex-col items-center justify-center py-16">
+        <mat-icon class="text-6xl text-red-400 mb-4" svgIcon="heroicons_outline:exclamation-triangle"></mat-icon>
+        <div class="text-xl font-semibold text-gray-500 text-center mb-2">{{ error }}</div>
+        <button mat-stroked-button color="primary" (click)="refreshRooms()">
+            <mat-icon class="mr-2" svgIcon="heroicons_outline:arrow-path"></mat-icon>
+            Try Again
+        </button>
+    </div>
+
+    <!-- Sessions List -->
+    <div *ngIf="!isLoading && !error">
+        <div *ngIf="sessions$ | async as sessions; else noSessions">
+            <div *ngIf="sessions.length > 0; else noSessions">
+                <!-- Active Sessions -->
+                <div *ngIf="getActiveSessionsCount(sessions) > 0" class="mb-8">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                        <mat-icon class="mr-2 text-green-500" svgIcon="heroicons_outline:chat-bubble-left-right"></mat-icon>
+                        Active Conversations
+                        <span class="ml-2 px-2 py-1 text-xs font-medium bg-green-100 text-green-800 dark:bg-green-500 dark:text-green-50 rounded-full">
+                            {{ getActiveSessionsCount(sessions) }}
+                        </span>
+                    </h3>
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        <ng-container *ngFor="let session of getActiveSessions(sessions); trackBy: trackBySessionId">
+                            <mat-card class="hover:shadow-lg transition-shadow duration-200 cursor-pointer" 
+                                      [routerLink]="['chat', session.sessionId]">
+                                <mat-card-header>
+                                    <div mat-card-avatar class="bg-green-100 dark:bg-green-500 flex items-center justify-center">
+                                        <mat-icon class="text-green-600 dark:text-green-50" svgIcon="heroicons_outline:chat-bubble-left-right"></mat-icon>
+                                    </div>
+                                    <mat-card-title class="text-base font-medium">{{ formatSessionTitle(session) }}</mat-card-title>
+                                    <mat-card-subtitle class="flex items-center">
+                                        <span [class]="getStatusBadgeClass(session.status)" 
+                                              class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mr-2">
+                                            <span class="w-1.5 h-1.5 bg-current rounded-full mr-1"></span>
+                                            {{ session.status | titlecase }}
+                                        </span>
+                                        <span class="text-xs text-gray-500">{{ getRelativeTime(session.metadata.lastActivity) }}</span>
+                                    </mat-card-subtitle>
+                                </mat-card-header>
+                                <mat-card-content>
+                                    <div class="space-y-2">
+                                        <div class="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                                            <mat-icon class="mr-2 text-gray-400" svgIcon="heroicons_outline:chat-bubble-oval-left-ellipsis"></mat-icon>
+                                            {{ session.messageCount }} messages
+                                        </div>
+                                        <div class="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                                            <mat-icon class="mr-2 text-gray-400" svgIcon="heroicons_outline:hashtag"></mat-icon>
+                                            Topic: {{ session.communicationTopicId }}
+                                        </div>
+                                    </div>
+                                </mat-card-content>
+                                <mat-card-actions align="end">
+                                    <button mat-button color="primary">
+                                        <mat-icon class="mr-1" svgIcon="heroicons_outline:arrow-right"></mat-icon>
+                                        Join Chat
+                                    </button>
+                                </mat-card-actions>
+                            </mat-card>
+                        </ng-container>
+                    </div>
+                </div>
+
+                <!-- Ended Sessions -->
+                <div *ngIf="getEndedSessionsCount(sessions) > 0">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                        <mat-icon class="mr-2 text-gray-500" svgIcon="heroicons_outline:archive-box"></mat-icon>
+                        Past Conversations
+                        <span class="ml-2 px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-500 dark:text-gray-50 rounded-full">
+                            {{ getEndedSessionsCount(sessions) }}
+                        </span>
+                    </h3>
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        <ng-container *ngFor="let session of getEndedSessions(sessions); trackBy: trackBySessionId">
+                            <mat-card class="hover:shadow-lg transition-shadow duration-200 cursor-pointer opacity-75" 
+                                      [routerLink]="['transcript', session.sessionId]">
+                                <mat-card-header>
+                                    <div mat-card-avatar class="bg-gray-100 dark:bg-gray-500 flex items-center justify-center">
+                                        <mat-icon class="text-gray-600 dark:text-gray-50" svgIcon="heroicons_outline:document-text"></mat-icon>
+                                    </div>
+                                    <mat-card-title class="text-base font-medium">{{ formatSessionTitle(session) }}</mat-card-title>
+                                    <mat-card-subtitle class="flex items-center">
+                                        <span [class]="getStatusBadgeClass(session.status)" 
+                                              class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mr-2">
+                                            {{ session.status | titlecase }}
+                                        </span>
+                                        <span class="text-xs text-gray-500">{{ getRelativeTime(session.createdAt) }}</span>
+                                    </mat-card-subtitle>
+                                </mat-card-header>
+                                <mat-card-content>
+                                    <div class="space-y-2">
+                                        <div class="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                                            <mat-icon class="mr-2 text-gray-400" svgIcon="heroicons_outline:chat-bubble-oval-left-ellipsis"></mat-icon>
+                                            {{ session.messageCount }} messages
+                                        </div>
+                                        <div class="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                                            <mat-icon class="mr-2 text-gray-400" svgIcon="heroicons_outline:hashtag"></mat-icon>
+                                            Topic: {{ session.communicationTopicId }}
+                                        </div>
+                                    </div>
+                                </mat-card-content>
+                                <mat-card-actions align="end">
+                                    <button mat-button color="primary">
+                                        <mat-icon class="mr-1" svgIcon="heroicons_outline:document-text"></mat-icon>
+                                        View Transcript
+                                    </button>
+                                </mat-card-actions>
+                            </mat-card>
+                        </ng-container>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- No Sessions State -->
+        <ng-template #noSessions>
+            <div class="flex flex-col items-center justify-center py-16">
+                <mat-icon class="text-8xl text-gray-400 mb-4" svgIcon="heroicons_outline:chat-bubble-left-right"></mat-icon>
+                <div class="text-2xl font-semibold text-gray-500 text-center mb-2">No chat rooms yet</div>
+                <div class="text-gray-400 text-center mb-6 max-w-md">
+                    Create your first agent-to-agent conversation room to get started with AI collaboration.
+                </div>
+                <button mat-flat-button color="primary" [routerLink]="['create']">
+                    <mat-icon class="mr-2" svgIcon="heroicons_outline:plus"></mat-icon>
+                    Create Your First Room
+                </button>
+            </div>
+        </ng-template>
+    </div>
+</div>

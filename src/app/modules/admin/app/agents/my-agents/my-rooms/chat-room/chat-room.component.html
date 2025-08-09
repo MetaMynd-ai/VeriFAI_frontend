@@ -1,0 +1,325 @@
+<div class="flex flex-col h-full overflow-hidden">
+    <!-- Header -->
+    <div class="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center">
+                <button mat-icon-button (click)="goBack()" class="mr-3">
+                    <mat-icon svgIcon="heroicons_outline:arrow-left"></mat-icon>
+                </button>
+                <div>
+                    <h2 class="text-xl font-semibold text-gray-900 dark:text-white" *ngIf="session$ | async as session">
+                        {{ (getAgentName(session.agent1AccountId) | async) || 'Agent 1' }} & 
+                        {{ (getAgentName(session.agent2AccountId) | async) || 'Agent 2' }}
+                    </h2>
+                    <div class="flex items-center mt-1">
+                        <div class="flex items-center mr-4">
+                            <div class="w-2 h-2 rounded-full mr-2" 
+                                 [class.bg-green-500]="uiState.isConnected"
+                                 [class.bg-red-500]="!uiState.isConnected"></div>
+                            <span class="text-sm text-gray-500">
+                                {{ uiState.isConnected ? 'Connected' : 'Disconnected' }}
+                            </span>
+                        </div>
+                        <div class="text-sm text-gray-500" *ngIf="session$ | async as session">
+                            Topic: {{ session.communicationTopicId }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center space-x-2">
+                <!-- End Session Button -->
+                <button mat-icon-button
+                        color="warn"
+                        (click)="endSession()"
+                        [disabled]="isEndingSession"
+                        [matTooltip]="isEndingSession ? 'Ending conversation...' : 'End conversation'"
+                        class="text-red-600 hover:text-red-800">
+                    <mat-icon *ngIf="!isEndingSession">close</mat-icon>
+                    <mat-icon *ngIf="isEndingSession" class="animate-spin">refresh</mat-icon>
+                </button>
+                <button mat-stroked-button
+                        color="primary"
+                        (click)="testUserMessage()"
+                        class="text-xs">
+                    📤 Test User Message
+                </button>
+                <button mat-stroked-button
+                        color="accent"
+                        (click)="viewTranscript()"
+                        class="text-xs">
+                    📜 View Transcript
+                </button>
+                <button mat-stroked-button
+                        color="primary"
+                        (click)="testStreamMessages()"
+                        class="text-xs">
+                    🌊 Stream Messages
+                </button>
+                <button mat-stroked-button
+                        color="warn"
+                        (click)="retryInitialization()"
+                        class="text-xs">
+                    🔄 Retry Connection
+                </button>
+                <button mat-icon-button
+                        [matTooltip]="'Trigger AI Response'"
+                        (click)="triggerAIForCurrentSession()"
+                        [disabled]="!uiState.isConnected || uiState.isAITyping">
+                    <mat-icon svgIcon="heroicons_outline:cpu-chip"></mat-icon>
+                </button>
+                <button mat-icon-button
+                        [matTooltip]="'End Session'"
+                        (click)="endSession()"
+                        [disabled]="!uiState.isConnected">
+                    <mat-icon svgIcon="heroicons_outline:x-mark"></mat-icon>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading State -->
+    <div *ngIf="isLoading" class="flex-1 flex flex-col items-center justify-center">
+        <mat-progress-spinner mode="indeterminate" diameter="48"></mat-progress-spinner>
+        <div class="mt-4 text-center">
+            <span class="text-lg font-medium text-gray-700 dark:text-gray-300">Loading chat room...</span>
+        </div>
+    </div>
+
+    <!-- Error State -->
+    <div *ngIf="error && !isLoading" class="flex-1 flex flex-col items-center justify-center p-6">
+        <mat-icon class="text-6xl text-red-400 mb-4" svgIcon="heroicons_outline:exclamation-triangle"></mat-icon>
+        <div class="text-center max-w-md">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">Chat Room Error</h3>
+            <p class="text-gray-600 dark:text-gray-400 mb-4">{{ error }}</p>
+            <div class="space-y-2">
+                <button mat-stroked-button color="primary" (click)="goBack()">
+                    <mat-icon svgIcon="heroicons_outline:arrow-left" class="mr-2"></mat-icon>
+                    Back to Rooms
+                </button>
+                <button mat-stroked-button (click)="retryInitialization()" *ngIf="sessionId">
+                    <mat-icon svgIcon="heroicons_outline:arrow-path" class="mr-2"></mat-icon>
+                    Retry
+                </button>
+            </div>
+            <div class="mt-4 text-xs text-gray-500" *ngIf="sessionId">
+                Session ID: {{ sessionId }}
+            </div>
+        </div>
+    </div>
+
+    <!-- Chat Interface -->
+    <div *ngIf="!isLoading && !error" class="flex-1 flex flex-col overflow-hidden">
+        <!-- Debug Info -->
+        <div class="bg-yellow-100 p-2 text-xs" *ngIf="session$ | async as session">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <strong>Session Info:</strong><br>
+                    Agent1 (You): {{ session.agent1AccountId }}<br>
+                    Agent2 (AI): {{ session.agent2AccountId }}<br>
+                    Messages: {{ currentMessages.length }}
+                </div>
+                <div>
+                    <strong>Last Message:</strong><br>
+                    <span *ngIf="currentMessages.length > 0">
+                        From: {{ currentMessages[currentMessages.length - 1]?.fromAgentId === session.agent1AccountId ? 'Agent1 (You)' : 'Agent2 (AI)' }}<br>
+                        Text: {{ currentMessages[currentMessages.length - 1]?.message }}
+                    </span>
+                    <span *ngIf="currentMessages.length === 0">No messages yet</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Messages Container -->
+        <div #messagesContainer class="flex-1 overflow-y-auto p-6 space-y-4">
+            <!-- Empty state -->
+            <div *ngIf="currentMessages.length === 0" class="flex items-center justify-center h-full">
+                <div class="text-center text-gray-500">
+                    <mat-icon class="text-6xl mb-4" svgIcon="heroicons_outline:chat-bubble-left-right"></mat-icon>
+                    <p class="text-lg">No messages yet</p>
+                    <p class="text-sm">Start the conversation by sending a message below</p>
+                </div>
+            </div>
+
+            <!-- Messages using getter -->
+            <div *ngFor="let message of currentMessages; trackBy: trackByMessageId"
+                 class="flex"
+                 [ngClass]="getMessageAlignment(message.fromAgentId)">
+                <div class="flex flex-col max-w-xs lg:max-w-md">
+                    <!-- Agent Name -->
+                    <div class="text-xs text-gray-500 mb-1" 
+                         [class.text-right]="getMessageAlignment(message.fromAgentId) === 'justify-end'">
+                        {{ (getAgentName(message.fromAgentId) | async) || message.fromAgentId }}
+                    </div>
+                    <!-- Message Bubble -->
+                    <div [ngClass]="getMessageBubbleClass(message.fromAgentId)">
+                        <div class="whitespace-pre-wrap">{{ message.message }}</div>
+                        <div class="text-xs mt-1 opacity-75">
+                            {{ formatTimestamp(message.timestamp) }}
+                        </div>
+                    </div>
+                    <!-- Metadata -->
+                    <div *ngIf="message.metadata" class="text-xs text-gray-400 mt-1"
+                         [class.text-right]="getMessageAlignment(message.fromAgentId) === 'justify-end'">
+                        <span *ngIf="message.metadata.aiModel">{{ message.metadata.aiModel }}</span>
+                        <span *ngIf="message.metadata.processingTime"> • {{ message.metadata.processingTime }}ms</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Typing Indicator -->
+            <div *ngIf="uiState.isAITyping" class="flex justify-start">
+                <div class="flex flex-col max-w-xs lg:max-w-md">
+                    <div class="text-xs text-gray-500 mb-1">
+                        {{ (getAgentName(uiState.typingAgentId || '') | async) || 'AI Agent' }}
+                    </div>
+                    <div class="bg-gray-200 dark:bg-gray-700 px-4 py-2 rounded-lg">
+                        <div class="flex items-center space-x-1">
+                            <div class="flex space-x-1">
+                                <div class="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
+                                <div class="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
+                                <div class="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                            </div>
+                            <span class="text-sm text-gray-600 dark:text-gray-400 ml-2">AI is thinking...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Message Input -->
+        <div class="flex-shrink-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4">
+            <form [formGroup]="messageForm" (ngSubmit)="sendMessage()" class="flex items-end space-x-3">
+                <mat-form-field appearance="outline" class="flex-1">
+                    <mat-label>Type a message as Agent1...</mat-label>
+                    <textarea
+                        matInput
+                        formControlName="message"
+                        rows="1"
+                        (keydown.enter)="$event.shiftKey || sendMessage(); $event.shiftKey || $event.preventDefault()"
+                        [disabled]="!uiState.isConnected"
+                        placeholder="Type your message as Agent1..."></textarea>
+                </mat-form-field>
+                <button 
+                    type="submit" 
+                    mat-fab 
+                    color="primary" 
+                    [disabled]="!messageForm.get('message')?.value?.trim() || !uiState.isConnected">
+                    <mat-icon svgIcon="heroicons_outline:paper-airplane"></mat-icon>
+                </button>
+            </form>
+            
+            <!-- Connection Status -->
+            <div *ngIf="uiState.connectionError" class="mt-2 text-sm text-red-600 dark:text-red-400">
+                {{ uiState.connectionError }}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Transcript Modal -->
+<div *ngIf="showTranscriptModal"
+     class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+     (click)="closeTranscriptModal()">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[80vh] flex flex-col"
+         (click)="$event.stopPropagation()">
+
+        <!-- Modal Header -->
+        <div class="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+            <div>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Chat Transcript</h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400" *ngIf="transcriptData">
+                    Session: {{ transcriptData.sessionId }} |
+                    Messages: {{ transcriptData.messageCount }} |
+                    {{ transcriptData.submittedToHcs ? 'Submitted to HCS' : 'Not submitted to HCS' }}
+                </p>
+            </div>
+            <button mat-icon-button (click)="closeTranscriptModal()" class="text-gray-400 hover:text-gray-600">
+                <mat-icon>close</mat-icon>
+            </button>
+        </div>
+
+        <!-- Modal Content -->
+        <div class="flex-1 overflow-hidden p-6">
+            <!-- Loading State -->
+            <div *ngIf="isLoadingTranscript" class="flex items-center justify-center h-64">
+                <div class="text-center">
+                    <mat-spinner diameter="40"></mat-spinner>
+                    <p class="mt-4 text-gray-600 dark:text-gray-400">Loading transcript...</p>
+                </div>
+            </div>
+
+            <!-- Error State -->
+            <div *ngIf="transcriptError && !isLoadingTranscript" class="flex items-center justify-center h-64">
+                <div class="text-center">
+                    <mat-icon class="text-red-500 text-4xl mb-4">error</mat-icon>
+                    <p class="text-red-600 dark:text-red-400">{{ transcriptError }}</p>
+                    <button mat-stroked-button color="primary" (click)="loadTranscript()" class="mt-4">
+                        Try Again
+                    </button>
+                </div>
+            </div>
+
+            <!-- Transcript Content -->
+            <div *ngIf="transcriptData && !isLoadingTranscript && !transcriptError" class="h-full">
+                <!-- Session Info -->
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-4">
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <span class="font-medium text-gray-700 dark:text-gray-300">Agents:</span>
+                            <span class="ml-2 text-gray-900 dark:text-white">
+                                {{ transcriptData.transcript.sessionInfo.agent1Name }} ↔
+                                {{ transcriptData.transcript.sessionInfo.agent2Name }}
+                            </span>
+                        </div>
+                        <div>
+                            <span class="font-medium text-gray-700 dark:text-gray-300">Duration:</span>
+                            <span class="ml-2 text-gray-900 dark:text-white">
+                                {{ formatDate(transcriptData.transcript.sessionInfo.startedAt) }} -
+                                {{ formatDate(transcriptData.transcript.sessionInfo.endedAt) }}
+                            </span>
+                        </div>
+                        <div>
+                            <span class="font-medium text-gray-700 dark:text-gray-300">Blockchain:</span>
+                            <a [href]="'https://hashscan.io/testnet/topic/' + session.communicationTopicId + '/messages'"
+                               target="_blank"
+                               class="ml-2 text-blue-600 hover:text-blue-800 underline">
+                                View on Hashscan
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Conversation -->
+                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                    <div class="bg-gray-100 dark:bg-gray-700 px-4 py-2 border-b border-gray-200 dark:border-gray-600">
+                        <h4 class="font-medium text-gray-900 dark:text-white">Conversation History</h4>
+                    </div>
+                    <div class="max-h-96 overflow-y-auto p-4 space-y-3">
+                        <div *ngFor="let message of transcriptData.transcript.conversation; let i = index"
+                             class="flex flex-col space-y-1">
+                            <div class="text-xs text-gray-500 dark:text-gray-400">
+                                Message {{ i + 1 }}
+                            </div>
+                            <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                                <pre class="whitespace-pre-wrap text-sm text-gray-900 dark:text-white font-mono">{{ message }}</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="flex items-center justify-end space-x-3 p-6 border-t border-gray-200 dark:border-gray-700">
+            <button mat-stroked-button (click)="closeTranscriptModal()">
+                Close
+            </button>
+            <button mat-raised-button
+                    color="primary"
+                    *ngIf="!transcriptData && !isLoadingTranscript"
+                    (click)="generateTranscript()">
+                Generate Transcript
+            </button>
+        </div>
+    </div>
+</div>

@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { UserService } from 'app/core/user/user.service';
-import { Observable, throwError, switchMap, take, catchError, map, forkJoin, of } from 'rxjs';
+import { Observable, throwError, switchMap, take, catchError, map, forkJoin, of, shareReplay } from 'rxjs';
 import { environment } from 'environments/environment';
 import { Agent, AgentProfile, WalletCreationResponse, DIDIssuanceResponse, VCCreationResponse, VCIssuancePayload, AgentListItem } from './agent.interfaces';
 import { AgentStatus, AgentVcIssueStatus, AgentType, AgentCategory } from './agent.enums'; // Assuming these enums are available
@@ -13,6 +13,11 @@ export class AgentService {
     private _httpClient = inject(HttpClient);
     private _userService = inject(UserService);
     private _apiBaseUrl = environment.apiBaseUrl;
+
+    // Cache for agents data with timestamp
+    private _agentsCache$: Observable<AgentListItem[]> | null = null;
+    private _cacheTimestamp: number = 0;
+    private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache
 
     private _fetchAgentAccountBalance(accountId: string): Observable<number | null> {
         if (!accountId) {
@@ -54,9 +59,28 @@ export class AgentService {
     /**
      * Get agents for the authenticated user, enrich them with full profiles and balances.
      * Returns AgentListItem which combines AgentProfile with account balance.
+     * Uses caching to prevent multiple requests.
      */
     getAgents(): Observable<AgentListItem[]> {
-        return this._userService.user$.pipe(
+        const now = Date.now();
+        
+        // Return cached data if available and not expired
+        if (this._agentsCache$ && (now - this._cacheTimestamp) < this.CACHE_DURATION) {
+            console.log('[AgentService] Returning cached agents data');
+            return this._agentsCache$;
+        }
+        
+        // Clear expired cache
+        if (this._agentsCache$ && (now - this._cacheTimestamp) >= this.CACHE_DURATION) {
+            console.log('[AgentService] Cache expired, clearing');
+            this._agentsCache$ = null;
+        }
+
+        console.log('[AgentService] Creating new agents cache');
+        this._cacheTimestamp = now;
+        
+        // Create and cache the observable
+        this._agentsCache$ = this._userService.user$.pipe(
             take(1),
             switchMap((user: User) => {
                 if (!user || !user.username) {
@@ -64,16 +88,19 @@ export class AgentService {
                     return throwError(() => 'User username not available for API path');
                 }
                 const owner = user.username;
+                console.log('[AgentService] Fetching basic agents from API');
                 return this._httpClient.get<Agent[]>(`${this._apiBaseUrl}wallets/${owner}/agents`, { withCredentials: true });
             }),
             switchMap((basicAgents: Agent[]) => {
                 if (!basicAgents || basicAgents.length === 0) {
+                    console.log('[AgentService] No agents found');
                     return of([]);
                 }
+                
+                console.log(`[AgentService] Processing ${basicAgents.length} agents with profiles and balances`);
                 const agentDetailObservables = basicAgents.map(basicAgent => {
                     const accountId = basicAgent.account.id;
                     if (!accountId) {
-                        // Should ideally not happen if basicAgent structure is consistent
                         console.warn('[AgentService] Agent missing account ID:', basicAgent);
                         const defaultProfile = this._createDefaultAgentProfile('N/A', basicAgent);
                         return of({
@@ -83,21 +110,19 @@ export class AgentService {
                     }
 
                     return forkJoin({
-                        profile: this.getAgentProfileById(accountId, basicAgent), // Pass basicAgent for fallback purpose
+                        profile: this.getAgentProfileById(accountId, basicAgent),
                         balance: this._fetchAgentAccountBalance(accountId)
                     }).pipe(
                         map(({ profile, balance }) => {
-                            // profile is guaranteed to be AgentProfile (either real or default)
                             return {
                                 ...profile,
                                 account: {
-                                    id: profile.agentAccountId, // from profile
+                                    id: profile.agentAccountId,
                                     balance: balance
                                 }
                             } as AgentListItem;
                         }),
                         catchError((err) => {
-                            // Fallback if forkJoin fails for an individual agent
                             console.error(`[AgentService] Error processing agent ${accountId} details:`, err);
                             const defaultProfile = this._createDefaultAgentProfile(accountId, basicAgent);
                             return of({
@@ -109,11 +134,25 @@ export class AgentService {
                 });
                 return forkJoin(agentDetailObservables);
             }),
+            shareReplay(1),
             catchError(err => {
                 console.error('[AgentService] Error fetching or processing agents with profiles and balances:', err);
-                return throwError(() => err); // Or return of([]) to gracefully handle in component
+                this._agentsCache$ = null;
+                this._cacheTimestamp = 0;
+                return throwError(() => err);
             })
         );
+
+        return this._agentsCache$;
+    }
+
+    /**
+     * Clear the agents cache (useful when agents are updated)
+     */
+    clearAgentsCache(): void {
+        console.log('[AgentService] Clearing agents cache');
+        this._agentsCache$ = null;
+        this._cacheTimestamp = 0;
     }
 
     /**

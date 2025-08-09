@@ -29,6 +29,29 @@
     <!-- Main content area for child routes -->
     <div class="flex flex-auto p-6 sm:p-10">
         <div class="mx-auto flex w-full flex-auto flex-col" [ngClass]="showFilters ? 'w-full' : 'max-w-full'">
+            <!-- Navigation Tabs (only show on main routes) -->
+            <div *ngIf="showNavigationTabs" class="mb-8">
+                <nav class="flex space-x-8" aria-label="Tabs">
+                    <a [routerLink]="['/my-agents']"
+                       routerLinkActive="border-primary text-primary"
+                       [routerLinkActiveOptions]="{exact: true}"
+                       class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors duration-200">
+                        <div class="flex items-center">
+                            <mat-icon class="mr-2" svgIcon="heroicons_outline:user-group"></mat-icon>
+                            My Agents
+                        </div>
+                    </a>
+                    <a [routerLink]="['/my-agents/rooms']"
+                       routerLinkActive="border-primary text-primary"
+                       class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors duration-200">
+                        <div class="flex items-center">
+                            <mat-icon class="mr-2" svgIcon="heroicons_outline:chat-bubble-left-right"></mat-icon>
+                            My Rooms
+                        </div>
+                    </a>
+                </nav>
+            </div>
+
             <!-- Router Outlet for child components -->
             <div [ngClass]="showFilters ? 'mt-8 sm:mt-10' : ''">
                  <router-outlet></router-outlet>

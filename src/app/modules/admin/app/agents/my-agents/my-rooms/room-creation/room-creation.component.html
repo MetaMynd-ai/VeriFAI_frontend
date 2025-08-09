@@ -1,0 +1,184 @@
+<div class="flex flex-col flex-auto overflow-y-auto">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Create Chat Room</h2>
+            <p class="text-gray-600 dark:text-gray-400 mt-1">Set up a new agent-to-agent conversation</p>
+        </div>
+        <button mat-stroked-button (click)="cancel()" [disabled]="isCreating">
+            <mat-icon class="mr-2" svgIcon="heroicons_outline:x-mark"></mat-icon>
+            Cancel
+        </button>
+    </div>
+
+    <!-- Loading State -->
+    <div *ngIf="isLoading" class="flex flex-col items-center justify-center py-16">
+        <mat-progress-spinner mode="indeterminate" diameter="48"></mat-progress-spinner>
+        <div class="mt-4 text-center">
+            <span class="text-lg font-medium text-gray-700 dark:text-gray-300">Loading agents...</span>
+        </div>
+    </div>
+
+    <!-- Error State -->
+    <div *ngIf="error && !isLoading && !isCreating" class="mb-6">
+        <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+            <div class="flex items-center">
+                <mat-icon class="text-red-400 mr-3" svgIcon="heroicons_outline:exclamation-triangle"></mat-icon>
+                <div class="text-red-800 dark:text-red-200">{{ error }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Room Creation Form -->
+    <div *ngIf="!isLoading && !error">
+        <form [formGroup]="roomForm" (ngSubmit)="createRoom()" class="max-w-2xl">
+            <mat-card class="mb-6">
+                <mat-card-header>
+                    <mat-card-title class="flex items-center">
+                        <mat-icon class="mr-2 text-blue-500" svgIcon="heroicons_outline:users"></mat-icon>
+                        Select Agents
+                    </mat-card-title>
+                    <mat-card-subtitle>Choose exactly 2 agents for the conversation</mat-card-subtitle>
+                </mat-card-header>
+                <mat-card-content class="space-y-6">
+                    <!-- Agent 1 Selection -->
+                    <mat-form-field appearance="outline" class="w-full">
+                        <mat-label>First Agent</mat-label>
+                        <mat-select formControlName="agent1" [placeholder]="'Select first agent'">
+                            <mat-option 
+                                *ngFor="let agent of availableAgents$ | async; trackBy: trackByAgentId" 
+                                [value]="agent.accountId">
+                                <div class="flex items-center justify-between w-full">
+                                    <div class="flex items-center">
+                                        <div class="w-2 h-2 bg-green-500 rounded-full mr-3" 
+                                             [class.bg-green-500]="agent.isOnline"
+                                             [class.bg-gray-400]="!agent.isOnline"></div>
+                                        <div>
+                                            <div class="font-medium">{{ agent.agentName }}</div>
+                                            <div class="text-sm text-gray-500">{{ agent.accountId }}</div>
+                                        </div>
+                                    </div>
+                                    <div class="text-xs text-gray-400" *ngIf="agent.communicationTopicId">
+                                        Topic: {{ agent.communicationTopicId }}
+                                    </div>
+                                </div>
+                            </mat-option>
+                        </mat-select>
+                        <mat-error *ngIf="hasFieldError('agent1')">
+                            {{ getFieldError('agent1') }}
+                        </mat-error>
+                    </mat-form-field>
+
+                    <!-- Agent 2 Selection -->
+                    <mat-form-field appearance="outline" class="w-full">
+                        <mat-label>Second Agent</mat-label>
+                        <mat-select formControlName="agent2" [placeholder]="'Select second agent'">
+                            <mat-option
+                                *ngFor="let agent of availableAgent2Options$ | async; trackBy: trackByAgentId"
+                                [value]="agent.accountId">
+                                <div class="flex items-center justify-between w-full">
+                                    <div class="flex items-center">
+                                        <div class="w-2 h-2 bg-green-500 rounded-full mr-3" 
+                                             [class.bg-green-500]="agent.isOnline"
+                                             [class.bg-gray-400]="!agent.isOnline"></div>
+                                        <div>
+                                            <div class="font-medium">{{ agent.agentName }}</div>
+                                            <div class="text-sm text-gray-500">{{ agent.accountId }}</div>
+                                        </div>
+                                    </div>
+                                    <div class="text-xs text-gray-400" *ngIf="agent.communicationTopicId">
+                                        Topic: {{ agent.communicationTopicId }}
+                                    </div>
+                                </div>
+                            </mat-option>
+                        </mat-select>
+                        <mat-error *ngIf="hasFieldError('agent2')">
+                            {{ getFieldError('agent2') }}
+                        </mat-error>
+                    </mat-form-field>
+                </mat-card-content>
+            </mat-card>
+
+            <!-- Topic Selection -->
+            <mat-card class="mb-6" *ngIf="roomForm.get('agent1')?.value && roomForm.get('agent2')?.value">
+                <mat-card-header>
+                    <mat-card-title class="flex items-center">
+                        <mat-icon class="mr-2 text-purple-500" svgIcon="heroicons_outline:hashtag"></mat-icon>
+                        Blockchain Topic Selection
+                    </mat-card-title>
+                    <mat-card-subtitle>Choose which agent's blockchain topic to use for transcript submission</mat-card-subtitle>
+                </mat-card-header>
+                <mat-card-content>
+                    <mat-radio-group formControlName="preferredTopicAgent" class="flex flex-col space-y-4">
+                        <mat-radio-button value="agent1" class="flex items-center">
+                            <div class="ml-3">
+                                <div class="font-medium">
+                                    Use {{ getAgentName(roomForm.get('agent1')?.value) || 'Agent 1' }}'s Topic
+                                </div>
+                                <div class="text-sm text-gray-500">
+                                    Account: {{ roomForm.get('agent1')?.value }}
+                                </div>
+                            </div>
+                        </mat-radio-button>
+                        <mat-radio-button value="agent2" class="flex items-center">
+                            <div class="ml-3">
+                                <div class="font-medium">
+                                    Use {{ getAgentName(roomForm.get('agent2')?.value) || 'Agent 2' }}'s Topic
+                                </div>
+                                <div class="text-sm text-gray-500">
+                                    Account: {{ roomForm.get('agent2')?.value }}
+                                </div>
+                            </div>
+                        </mat-radio-button>
+                    </mat-radio-group>
+                </mat-card-content>
+            </mat-card>
+
+            <!-- Preview -->
+            <mat-card class="mb-6" *ngIf="roomForm.get('agent1')?.value && roomForm.get('agent2')?.value">
+                <mat-card-header>
+                    <mat-card-title class="flex items-center">
+                        <mat-icon class="mr-2 text-green-500" svgIcon="heroicons_outline:eye"></mat-icon>
+                        Room Preview
+                    </mat-card-title>
+                </mat-card-header>
+                <mat-card-content>
+                    <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="font-medium">Room Title:</span>
+                            <span>{{ getAgentName(roomForm.get('agent1')?.value) || 'Agent 1' }} & {{ getAgentName(roomForm.get('agent2')?.value) || 'Agent 2' }}</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="font-medium">Participants:</span>
+                            <span>2 agents</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="font-medium">Transcript Topic:</span>
+                            <span>{{ roomForm.get('preferredTopicAgent')?.value === 'agent1' ? 'Agent 1' : 'Agent 2' }}'s blockchain topic</span>
+                        </div>
+                    </div>
+                </mat-card-content>
+            </mat-card>
+
+            <!-- Action Buttons -->
+            <div class="flex items-center justify-end space-x-4">
+                <button 
+                    type="button" 
+                    mat-stroked-button 
+                    (click)="cancel()" 
+                    [disabled]="isCreating">
+                    Cancel
+                </button>
+                <button 
+                    type="submit" 
+                    mat-flat-button 
+                    color="primary" 
+                    [disabled]="roomForm.invalid || isCreating">
+                    <mat-icon *ngIf="isCreating" class="mr-2 animate-spin" svgIcon="heroicons_outline:arrow-path"></mat-icon>
+                    <mat-icon *ngIf="!isCreating" class="mr-2" svgIcon="heroicons_outline:plus"></mat-icon>
+                    {{ isCreating ? 'Creating Room...' : 'Create Room' }}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>

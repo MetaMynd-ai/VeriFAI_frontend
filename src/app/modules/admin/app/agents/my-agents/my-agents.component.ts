@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, ViewEncapsulation, OnInit, OnDestroy, inject, ChangeDetectorRef } from '@angular/core';
-import { Router, RouterOutlet, NavigationEnd, ActivatedRoute, PRIMARY_OUTLET, RouterLink } from '@angular/router';
+import { Router, RouterOutlet, NavigationEnd, ActivatedRoute, PRIMARY_OUTLET, RouterLink, RouterLinkActive } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
@@ -10,6 +10,7 @@ import { Subject } from 'rxjs';
 import { filter, map, takeUntil, startWith } from 'rxjs/operators';
 import { MyAgentsListComponent } from './my-agents-list/my-agents-list.component';
 import { AgentFormComponent } from './agent-form/agent-form.component';
+import { MyRoomsComponent } from './my-rooms/my-rooms.component';
 
 @Component({
     selector     : 'my-agents',
@@ -27,7 +28,8 @@ import { AgentFormComponent } from './agent-form/agent-form.component';
 
         NgIf,
         NgClass,
-        RouterLink
+        RouterLink,
+        RouterLinkActive
     ]
 })
 export class MyAgentsComponent implements OnInit, OnDestroy
@@ -39,7 +41,8 @@ export class MyAgentsComponent implements OnInit, OnDestroy
 
     showFilters: boolean = false;
     showPageHeader: boolean = true;
-    showAddAgentButton: boolean = false; // New property
+    showAddAgentButton: boolean = false;
+    showNavigationTabs: boolean = false;
 
     categories = [
         { slug: 'TRAVEL', title: 'Travel' },
@@ -75,7 +78,8 @@ export class MyAgentsComponent implements OnInit, OnDestroy
             const currentComponent = route.component as any;
             this.showFilters = currentComponent === MyAgentsListComponent;
             this.showPageHeader = currentComponent === MyAgentsListComponent || currentComponent === AgentFormComponent;
-            this.showAddAgentButton = currentComponent === MyAgentsListComponent; // Set visibility for Add Agent button
+            this.showAddAgentButton = currentComponent === MyAgentsListComponent;
+            this.showNavigationTabs = currentComponent === MyAgentsListComponent || currentComponent === MyRoomsComponent;
             this._cdr.markForCheck();
         });
     }
