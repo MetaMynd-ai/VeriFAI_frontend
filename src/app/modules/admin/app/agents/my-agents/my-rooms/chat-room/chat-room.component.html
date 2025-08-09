@@ -29,7 +29,12 @@
             <div class="flex items-center space-x-2">
                 <!-- Chat Mode Buttons -->
                 <ng-container *ngIf="!isTranscriptMode">
-                    <!-- End Session Button -->
+                    <button mat-stroked-button
+                            color="accent"
+                            (click)="viewTranscript()"
+                            class="text-xs">
+                        📜 View Transcript
+                    </button>
                     <button mat-icon-button
                             color="warn"
                             (click)="endSession()"
@@ -38,42 +43,6 @@
                             class="text-red-600 hover:text-red-800">
                         <mat-icon *ngIf="!isEndingSession">close</mat-icon>
                         <mat-icon *ngIf="isEndingSession" class="animate-spin">refresh</mat-icon>
-                    </button>
-                    <button mat-stroked-button
-                            color="primary"
-                            (click)="testUserMessage()"
-                            class="text-xs">
-                        📤 Test User Message
-                    </button>
-                    <button mat-stroked-button
-                            color="accent"
-                            (click)="viewTranscript()"
-                            class="text-xs">
-                        📜 View Transcript
-                    </button>
-                    <button mat-stroked-button
-                            color="primary"
-                            (click)="testStreamMessages()"
-                            class="text-xs">
-                        🌊 Stream Messages
-                    </button>
-                    <button mat-stroked-button
-                            color="warn"
-                            (click)="retryInitialization()"
-                            class="text-xs">
-                        🔄 Retry Connection
-                    </button>
-                    <button mat-icon-button
-                            [matTooltip]="'Trigger AI Response'"
-                            (click)="triggerAIForCurrentSession()"
-                            [disabled]="!uiState.isConnected || uiState.isAITyping">
-                        <mat-icon svgIcon="heroicons_outline:cpu-chip"></mat-icon>
-                    </button>
-                    <button mat-icon-button
-                            [matTooltip]="'End Session'"
-                            (click)="endSession()"
-                            [disabled]="!uiState.isConnected">
-                        <mat-icon svgIcon="heroicons_outline:x-mark"></mat-icon>
                     </button>
                 </ng-container>
 
@@ -122,7 +91,7 @@
     <div *ngIf="!isLoading && !error" class="flex-1 flex flex-col overflow-hidden">
 
         <!-- Messages Container -->
-        <div #messagesContainer class="flex-1 overflow-y-auto p-6 space-y-4">
+        <div #messagesContainer class="flex-1 overflow-y-auto p-4 space-y-4">
             <!-- Empty state -->
             <div *ngIf="currentMessages.length === 0" class="flex items-center justify-center h-full">
                 <div class="text-center text-gray-500">
@@ -134,9 +103,9 @@
 
             <!-- Messages using getter -->
             <div *ngFor="let message of currentMessages; trackBy: trackByMessageId"
-                 class="flex"
+                 class="flex w-full"
                  [ngClass]="getMessageAlignment(message.fromAgentId)">
-                <div class="flex flex-col max-w-xs lg:max-w-md">
+                <div class="flex flex-col w-full max-w-4xl">
                     <!-- Agent Name -->
                     <div class="text-xs text-gray-500 mb-1" 
                          [class.text-right]="getMessageAlignment(message.fromAgentId) === 'justify-end'">
@@ -159,8 +128,8 @@
             </div>
 
             <!-- AI Typing Indicator -->
-            <div *ngIf="uiState.isAITyping" class="flex justify-start">
-                <div class="flex flex-col max-w-xs lg:max-w-md">
+            <div *ngIf="uiState.isAITyping" class="flex justify-start w-full">
+                <div class="flex flex-col w-full max-w-4xl">
                     <div class="text-xs text-gray-500 mb-1">
                         {{ (getAgentName(uiState.typingAgentId || '') | async) || 'AI Agent' }}
                     </div>
