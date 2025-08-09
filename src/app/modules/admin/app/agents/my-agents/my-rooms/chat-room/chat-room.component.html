@@ -27,52 +27,63 @@
                 </div>
             </div>
             <div class="flex items-center space-x-2">
-                <!-- End Session Button -->
-                <button mat-icon-button
-                        color="warn"
-                        (click)="endSession()"
-                        [disabled]="isEndingSession"
-                        [matTooltip]="isEndingSession ? 'Ending conversation...' : 'End conversation'"
-                        class="text-red-600 hover:text-red-800">
-                    <mat-icon *ngIf="!isEndingSession">close</mat-icon>
-                    <mat-icon *ngIf="isEndingSession" class="animate-spin">refresh</mat-icon>
-                </button>
-                <button mat-stroked-button
-                        color="primary"
-                        (click)="testUserMessage()"
-                        class="text-xs">
-                    📤 Test User Message
-                </button>
-                <button mat-stroked-button
-                        color="accent"
-                        (click)="viewTranscript()"
-                        class="text-xs">
-                    📜 View Transcript
-                </button>
-                <button mat-stroked-button
-                        color="primary"
-                        (click)="testStreamMessages()"
-                        class="text-xs">
-                    🌊 Stream Messages
-                </button>
-                <button mat-stroked-button
-                        color="warn"
-                        (click)="retryInitialization()"
-                        class="text-xs">
-                    🔄 Retry Connection
-                </button>
-                <button mat-icon-button
-                        [matTooltip]="'Trigger AI Response'"
-                        (click)="triggerAIForCurrentSession()"
-                        [disabled]="!uiState.isConnected || uiState.isAITyping">
-                    <mat-icon svgIcon="heroicons_outline:cpu-chip"></mat-icon>
-                </button>
-                <button mat-icon-button
-                        [matTooltip]="'End Session'"
-                        (click)="endSession()"
-                        [disabled]="!uiState.isConnected">
-                    <mat-icon svgIcon="heroicons_outline:x-mark"></mat-icon>
-                </button>
+                <!-- Chat Mode Buttons -->
+                <ng-container *ngIf="!isTranscriptMode">
+                    <!-- End Session Button -->
+                    <button mat-icon-button
+                            color="warn"
+                            (click)="endSession()"
+                            [disabled]="isEndingSession"
+                            [matTooltip]="isEndingSession ? 'Ending conversation...' : 'End conversation'"
+                            class="text-red-600 hover:text-red-800">
+                        <mat-icon *ngIf="!isEndingSession">close</mat-icon>
+                        <mat-icon *ngIf="isEndingSession" class="animate-spin">refresh</mat-icon>
+                    </button>
+                    <button mat-stroked-button
+                            color="primary"
+                            (click)="testUserMessage()"
+                            class="text-xs">
+                        📤 Test User Message
+                    </button>
+                    <button mat-stroked-button
+                            color="accent"
+                            (click)="viewTranscript()"
+                            class="text-xs">
+                        📜 View Transcript
+                    </button>
+                    <button mat-stroked-button
+                            color="primary"
+                            (click)="testStreamMessages()"
+                            class="text-xs">
+                        🌊 Stream Messages
+                    </button>
+                    <button mat-stroked-button
+                            color="warn"
+                            (click)="retryInitialization()"
+                            class="text-xs">
+                        🔄 Retry Connection
+                    </button>
+                    <button mat-icon-button
+                            [matTooltip]="'Trigger AI Response'"
+                            (click)="triggerAIForCurrentSession()"
+                            [disabled]="!uiState.isConnected || uiState.isAITyping">
+                        <mat-icon svgIcon="heroicons_outline:cpu-chip"></mat-icon>
+                    </button>
+                    <button mat-icon-button
+                            [matTooltip]="'End Session'"
+                            (click)="endSession()"
+                            [disabled]="!uiState.isConnected">
+                        <mat-icon svgIcon="heroicons_outline:x-mark"></mat-icon>
+                    </button>
+                </ng-container>
+
+                <!-- Transcript Mode Info -->
+                <ng-container *ngIf="isTranscriptMode">
+                    <div class="text-sm text-gray-600 dark:text-gray-400 flex items-center">
+                        <mat-icon class="mr-1 text-base" svgIcon="heroicons_outline:document-text"></mat-icon>
+                        Transcript View
+                    </div>
+                </ng-container>
             </div>
         </div>
     </div>
@@ -109,25 +120,6 @@
 
     <!-- Chat Interface -->
     <div *ngIf="!isLoading && !error" class="flex-1 flex flex-col overflow-hidden">
-        <!-- Debug Info -->
-        <div class="bg-yellow-100 p-2 text-xs" *ngIf="session$ | async as session">
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <strong>Session Info:</strong><br>
-                    Agent1 (You): {{ session.agent1AccountId }}<br>
-                    Agent2 (AI): {{ session.agent2AccountId }}<br>
-                    Messages: {{ currentMessages.length }}
-                </div>
-                <div>
-                    <strong>Last Message:</strong><br>
-                    <span *ngIf="currentMessages.length > 0">
-                        From: {{ currentMessages[currentMessages.length - 1]?.fromAgentId === session.agent1AccountId ? 'Agent1 (You)' : 'Agent2 (AI)' }}<br>
-                        Text: {{ currentMessages[currentMessages.length - 1]?.message }}
-                    </span>
-                    <span *ngIf="currentMessages.length === 0">No messages yet</span>
-                </div>
-            </div>
-        </div>
 
         <!-- Messages Container -->
         <div #messagesContainer class="flex-1 overflow-y-auto p-6 space-y-4">
@@ -186,8 +178,8 @@
             </div>
         </div>
 
-        <!-- Message Input -->
-        <div class="flex-shrink-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4">
+        <!-- Message Input (only show in chat mode) -->
+        <div *ngIf="!isTranscriptMode" class="flex-shrink-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4">
             <form [formGroup]="messageForm" (ngSubmit)="sendMessage()" class="flex items-end space-x-3">
                 <mat-form-field appearance="outline" class="flex-1">
                     <mat-label>Type a message as Agent1...</mat-label>
@@ -199,18 +191,26 @@
                         [disabled]="!uiState.isConnected"
                         placeholder="Type your message as Agent1..."></textarea>
                 </mat-form-field>
-                <button 
-                    type="submit" 
-                    mat-fab 
-                    color="primary" 
+                <button
+                    type="submit"
+                    mat-fab
+                    color="primary"
                     [disabled]="!messageForm.get('message')?.value?.trim() || !uiState.isConnected">
                     <mat-icon svgIcon="heroicons_outline:paper-airplane"></mat-icon>
                 </button>
             </form>
-            
+
             <!-- Connection Status -->
             <div *ngIf="uiState.connectionError" class="mt-2 text-sm text-red-600 dark:text-red-400">
                 {{ uiState.connectionError }}
+            </div>
+        </div>
+
+        <!-- Transcript Mode Footer -->
+        <div *ngIf="isTranscriptMode" class="flex-shrink-0 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4 text-center">
+            <div class="text-sm text-gray-600 dark:text-gray-400">
+                <mat-icon class="mr-1 text-base" svgIcon="heroicons_outline:document-text"></mat-icon>
+                Viewing conversation transcript
             </div>
         </div>
     </div>
@@ -261,33 +261,7 @@
 
             <!-- Transcript Content -->
             <div *ngIf="transcriptData && !isLoadingTranscript && !transcriptError" class="h-full">
-                <!-- Session Info -->
-                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-4">
-                    <div class="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                            <span class="font-medium text-gray-700 dark:text-gray-300">Agents:</span>
-                            <span class="ml-2 text-gray-900 dark:text-white">
-                                {{ transcriptData.transcript.sessionInfo.agent1Name }} ↔
-                                {{ transcriptData.transcript.sessionInfo.agent2Name }}
-                            </span>
-                        </div>
-                        <div>
-                            <span class="font-medium text-gray-700 dark:text-gray-300">Duration:</span>
-                            <span class="ml-2 text-gray-900 dark:text-white">
-                                {{ formatDate(transcriptData.transcript.sessionInfo.startedAt) }} -
-                                {{ formatDate(transcriptData.transcript.sessionInfo.endedAt) }}
-                            </span>
-                        </div>
-                        <div>
-                            <span class="font-medium text-gray-700 dark:text-gray-300">Blockchain:</span>
-                            <a [href]="'https://hashscan.io/testnet/topic/' + session.communicationTopicId + '/messages'"
-                               target="_blank"
-                               class="ml-2 text-blue-600 hover:text-blue-800 underline">
-                                View on Hashscan
-                            </a>
-                        </div>
-                    </div>
-                </div>
+
 
                 <!-- Conversation -->
                 <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">

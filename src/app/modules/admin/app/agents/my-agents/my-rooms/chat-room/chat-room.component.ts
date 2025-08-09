@@ -76,6 +76,9 @@ export class ChatRoomComponent implements OnInit, OnDestroy, AfterViewChecked {
     agents$: Observable<AgentListItem[]>;
     messageForm: FormGroup;
 
+    // Mode detection
+    isTranscriptMode = false; // True if viewing transcript, false if active chat
+
     // Getter for debugging (removed verbose logging to prevent spam)
     get currentMessages(): ChatMessage[] {
         return this.messages$.value;
@@ -116,16 +119,25 @@ export class ChatRoomComponent implements OnInit, OnDestroy, AfterViewChecked {
     }
 
     ngOnInit(): void {
+        // Detect mode first
+        this.isTranscriptMode = this._route.snapshot.url.some(segment => segment.path === 'transcript');
+        console.log('[ChatRoomComponent] Mode detected:', this.isTranscriptMode ? 'TRANSCRIPT' : 'CHAT');
+
         // Load session from route params ONCE
         this.loadSessionFromRoute();
 
-        this.setupWebSocketListeners();
-        this.connectToWebSocket();
+        // Only setup WebSocket for active chat mode, not transcript mode
+        if (!this.isTranscriptMode) {
+            this.setupWebSocketListeners();
+            this.connectToWebSocket();
+        } else {
+            console.log('[ChatRoomComponent] Transcript mode - skipping WebSocket setup');
+        }
 
         // Subscribe to messages changes for UI updates (removed verbose logging)
         this.messages$.pipe(
             takeUntil(this._unsubscribeAll)
-        ).subscribe(messages => {
+        ).subscribe(_ => {
             // Messages updated - UI will automatically reflect changes
         });
     }
@@ -214,46 +226,84 @@ export class ChatRoomComponent implements OnInit, OnDestroy, AfterViewChecked {
             return;
         }
 
-        // Load session, messages, and stored transcript with throttling
-        combineLatest([
-            this.session$,
-            this._agentChatService.getMessages(this.sessionId),
-            this._agentChatService.getStoredTranscript(this.sessionId).pipe(
-                catchError(error => {
-                    console.warn('[ChatRoomComponent] No stored transcript found or error loading:', error);
-                    return of(null); // Return null if no transcript exists
-                })
-            )
-        ]).pipe(
-            take(1), // CRITICAL: Only take the first emission to prevent loops
-            debounceTime(100), // Additional debouncing
-            takeUntil(this._unsubscribeAll)
-        ).subscribe({
-            next: ([session, messages, transcriptData]) => {
-                console.log('[ChatRoomComponent] Loaded session,', messages.length, 'messages, and transcript data:', transcriptData);
+        if (this.isTranscriptMode) {
+            // In transcript mode, only load session and stored transcript
+            combineLatest([
+                this.session$,
+                this._agentChatService.getStoredTranscript(this.sessionId).pipe(
+                    catchError(error => {
+                        console.warn('[ChatRoomComponent] No stored transcript found or error loading:', error);
+                        return of(null); // Return null if no transcript exists
+                    })
+                )
+            ]).pipe(
+                take(1), // CRITICAL: Only take the first emission to prevent loops
+                debounceTime(100), // Additional debouncing
+                takeUntil(this._unsubscribeAll)
+            ).subscribe({
+                next: ([session, transcriptData]) => {
+                    console.log('[ChatRoomComponent] Transcript mode - Loaded session and transcript data:', transcriptData);
 
-                this.session = session; // Store the session
+                    this.session = session; // Store the session
 
-                // Merge stored transcript with current messages
-                const allMessages = this.mergeTranscriptWithMessages(transcriptData, messages);
-                console.log('[ChatRoomComponent] Total messages after merging transcript:', allMessages.length);
+                    // In transcript mode, only show transcript messages
+                    const transcriptMessages = this.mergeTranscriptWithMessages(transcriptData, []);
+                    console.log('[ChatRoomComponent] Transcript mode - Total messages:', transcriptMessages.length);
 
-                this.messages$.next(allMessages);
-                this.isLoading = false;
-                this.shouldScrollToBottom = true;
-                this._cdr.markForCheck();
-            },
-            error: (error) => {
-                console.error('[ChatRoomComponent] Error loading data:', error);
-                console.error('[ChatRoomComponent] Error details:', {
-                    sessionId: this.sessionId,
-                    error: error
-                });
-                this.isLoading = false;
-                this.error = error.message || 'Failed to load chat room. Please try again.';
-                this._cdr.markForCheck();
-            }
-        });
+                    this.messages$.next(transcriptMessages);
+                    this.isLoading = false;
+                    this.shouldScrollToBottom = true;
+                    this._cdr.markForCheck();
+                },
+                error: (error) => {
+                    console.error('[ChatRoomComponent] Error loading transcript data:', error);
+                    this.isLoading = false;
+                    this.error = error.message || 'Failed to load transcript. Please try again.';
+                    this._cdr.markForCheck();
+                }
+            });
+        } else {
+            // In chat mode, load session, messages, and stored transcript with throttling
+            combineLatest([
+                this.session$,
+                this._agentChatService.getMessages(this.sessionId),
+                this._agentChatService.getStoredTranscript(this.sessionId).pipe(
+                    catchError(error => {
+                        console.warn('[ChatRoomComponent] No stored transcript found or error loading:', error);
+                        return of(null); // Return null if no transcript exists
+                    })
+                )
+            ]).pipe(
+                take(1), // CRITICAL: Only take the first emission to prevent loops
+                debounceTime(100), // Additional debouncing
+                takeUntil(this._unsubscribeAll)
+            ).subscribe({
+                next: ([session, messages, transcriptData]) => {
+                    console.log('[ChatRoomComponent] Chat mode - Loaded session,', messages.length, 'messages, and transcript data:', transcriptData);
+
+                    this.session = session; // Store the session
+
+                    // Merge stored transcript with current messages
+                    const allMessages = this.mergeTranscriptWithMessages(transcriptData, messages);
+                    console.log('[ChatRoomComponent] Chat mode - Total messages after merging transcript:', allMessages.length);
+
+                    this.messages$.next(allMessages);
+                    this.isLoading = false;
+                    this.shouldScrollToBottom = true;
+                    this._cdr.markForCheck();
+                },
+                error: (error) => {
+                    console.error('[ChatRoomComponent] Error loading data:', error);
+                    console.error('[ChatRoomComponent] Error details:', {
+                        sessionId: this.sessionId,
+                        error: error
+                    });
+                    this.isLoading = false;
+                    this.error = error.message || 'Failed to load chat room. Please try again.';
+                    this._cdr.markForCheck();
+                }
+            });
+        }
     }
 
     private setupWebSocketListeners(): void {
