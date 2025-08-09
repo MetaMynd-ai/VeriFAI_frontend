@@ -696,7 +696,7 @@ export class ChatRoomComponent implements OnInit, OnDestroy, AfterViewChecked {
                 console.log('[ChatRoomComponent] Transcript status:', status);
 
                 if (status.storedInDatabase) {
-                    // Transcript exists, fetch it
+                    //  Transcript exists, fetch it
                     this.fetchStoredTranscript();
                 } else {
                     // No transcript yet
