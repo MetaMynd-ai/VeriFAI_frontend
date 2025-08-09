@@ -22,8 +22,8 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatBadgeModule } from '@angular/material/badge';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { Subject, Observable, combineLatest, BehaviorSubject, throwError } from 'rxjs';
-import { takeUntil, map, switchMap, tap, startWith, take, shareReplay, debounceTime, distinctUntilChanged } from 'rxjs/operators';
+import { Subject, Observable, combineLatest, BehaviorSubject, throwError, of } from 'rxjs';
+import { takeUntil, map, switchMap, tap, startWith, take, shareReplay, debounceTime, distinctUntilChanged, catchError } from 'rxjs/operators';
 import { AgentChatService } from '../../agent-chat.service';
 import { AgentService } from '../../agent.service';
 import { WebSocketService } from '../../websocket.service';
@@ -214,20 +214,31 @@ export class ChatRoomComponent implements OnInit, OnDestroy, AfterViewChecked {
             return;
         }
 
-        // Load session and messages with throttling
+        // Load session, messages, and stored transcript with throttling
         combineLatest([
             this.session$,
-            this._agentChatService.getMessages(this.sessionId)
+            this._agentChatService.getMessages(this.sessionId),
+            this._agentChatService.getStoredTranscript(this.sessionId).pipe(
+                catchError(error => {
+                    console.warn('[ChatRoomComponent] No stored transcript found or error loading:', error);
+                    return of(null); // Return null if no transcript exists
+                })
+            )
         ]).pipe(
             take(1), // CRITICAL: Only take the first emission to prevent loops
             debounceTime(100), // Additional debouncing
             takeUntil(this._unsubscribeAll)
         ).subscribe({
-            next: ([session, messages]) => {
-                console.log('[ChatRoomComponent] Loaded session and', messages.length, 'messages');
+            next: ([session, messages, transcriptData]) => {
+                console.log('[ChatRoomComponent] Loaded session,', messages.length, 'messages, and transcript data:', transcriptData);
 
                 this.session = session; // Store the session
-                this.messages$.next(messages);
+
+                // Merge stored transcript with current messages
+                const allMessages = this.mergeTranscriptWithMessages(transcriptData, messages);
+                console.log('[ChatRoomComponent] Total messages after merging transcript:', allMessages.length);
+
+                this.messages$.next(allMessages);
                 this.isLoading = false;
                 this.shouldScrollToBottom = true;
                 this._cdr.markForCheck();
@@ -723,6 +734,18 @@ export class ChatRoomComponent implements OnInit, OnDestroy, AfterViewChecked {
         ).subscribe({
             next: (transcriptData) => {
                 console.log('[ChatRoomComponent] Transcript data received:', transcriptData);
+                console.log('[ChatRoomComponent] Transcript conversation:', transcriptData.transcript?.conversation);
+
+                // Debug: Log each conversation item to understand the structure
+                if (transcriptData.transcript?.conversation) {
+                    transcriptData.transcript.conversation.forEach((item: any, index: number) => {
+                        console.log(`[ChatRoomComponent] Conversation item ${index}:`, item);
+                        console.log(`[ChatRoomComponent] Item type:`, typeof item);
+                        if (typeof item === 'object') {
+                            console.log(`[ChatRoomComponent] Item keys:`, Object.keys(item));
+                        }
+                    });
+                }
 
                 this.isLoadingTranscript = false;
                 this.transcriptData = transcriptData;
@@ -782,6 +805,102 @@ export class ChatRoomComponent implements OnInit, OnDestroy, AfterViewChecked {
      */
     formatDate(dateString: string): string {
         return new Date(dateString).toLocaleString();
+    }
+
+    /**
+     * Get message content from conversation item (handles different data structures)
+     */
+    getMessageContent(messageItem: any): string {
+        if (typeof messageItem === 'string') {
+            return messageItem;
+        }
+        if (typeof messageItem === 'object' && messageItem !== null) {
+            // Try different possible property names
+            return messageItem.message || messageItem.content || messageItem.text || JSON.stringify(messageItem);
+        }
+        return String(messageItem);
+    }
+
+    /**
+     * Get agent name from conversation item
+     */
+    getMessageAgentName(messageItem: any): string {
+        if (typeof messageItem === 'object' && messageItem !== null) {
+            return messageItem.fromAgentName || messageItem.agentName || messageItem.from || '';
+        }
+        return '';
+    }
+
+    /**
+     * Get timestamp from conversation item
+     */
+    getMessageTimestamp(messageItem: any): string | null {
+        if (typeof messageItem === 'object' && messageItem !== null) {
+            return messageItem.timestamp || messageItem.createdAt || messageItem.time || null;
+        }
+        return null;
+    }
+
+    /**
+     * Merge stored transcript with current messages to display complete conversation history
+     */
+    private mergeTranscriptWithMessages(transcriptData: any, currentMessages: ChatMessage[]): ChatMessage[] {
+        if (!transcriptData?.transcript?.conversation) {
+            console.log('[ChatRoomComponent] No transcript data to merge, returning current messages');
+            return currentMessages;
+        }
+
+        console.log('[ChatRoomComponent] Merging transcript with', currentMessages.length, 'current messages');
+        console.log('[ChatRoomComponent] Transcript conversation items:', transcriptData.transcript.conversation.length);
+
+        // Convert transcript conversation items to ChatMessage format
+        const transcriptMessages: ChatMessage[] = transcriptData.transcript.conversation.map((item: any, index: number) => {
+            const messageContent = this.getMessageContent(item);
+            const agentName = this.getMessageAgentName(item);
+            const timestamp = this.getMessageTimestamp(item);
+
+            return {
+                _id: `transcript_${index}_${Date.now()}`, // Unique ID for transcript messages
+                sessionId: this.sessionId,
+                fromAgentId: item.fromAgentId || 'unknown',
+                message: messageContent,
+                timestamp: timestamp || new Date().toISOString(),
+                metadata: {
+                    source: 'transcript',
+                    originalIndex: index,
+                    agentName: agentName
+                }
+            };
+        });
+
+        // Combine transcript messages with current messages
+        // Sort by timestamp to maintain chronological order
+        const allMessages = [...transcriptMessages, ...currentMessages];
+
+        // Sort by timestamp (oldest first)
+        allMessages.sort((a, b) => {
+            const timeA = new Date(a.timestamp).getTime();
+            const timeB = new Date(b.timestamp).getTime();
+            return timeA - timeB;
+        });
+
+        // Remove duplicates based on message content and timestamp (basic deduplication)
+        const uniqueMessages = allMessages.filter((message, index, array) => {
+            return index === array.findIndex(m =>
+                m.message === message.message &&
+                m.fromAgentId === message.fromAgentId &&
+                Math.abs(new Date(m.timestamp).getTime() - new Date(message.timestamp).getTime()) < 1000 // Within 1 second
+            );
+        });
+
+        console.log('[ChatRoomComponent] Merged messages:', {
+            transcriptMessages: transcriptMessages.length,
+            currentMessages: currentMessages.length,
+            totalAfterMerge: allMessages.length,
+            uniqueAfterDeduplication: uniqueMessages.length
+        });
+
+        return uniqueMessages;
     }
 
     /**
